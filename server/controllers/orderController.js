@@ -1,0 +1,203 @@
+import Order from '../models/Order.js'
+import Counter from '../models/Counter.js'
+
+// Generate unique Order ID
+const generateOrderID = () => {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  let id = 'SWG-'
+  for (let i = 0; i < 6; i++) {
+    id += chars.charAt(Math.floor(Math.random() * chars.length))
+  }
+  return id
+}
+
+
+
+// POST /api/orders — public (customer books)
+export const createOrder = async (req, res) => {
+  try {
+
+    console.log('customerId received:', req.body.customerId)
+    console.log('customer object:', req.body.customer)
+
+    const {
+      customerName, customerPhone,
+      recipientName, recipientPhone,
+      pickupLocation, dropoffLocation,
+      pickupCoords, dropoffCoords, distance,
+      deliveryType, scheduledDate, scheduledTime,
+      packageDescription, additionalNotes,
+      deliveryFee, paymentMethod, customerId,
+    } = req.body
+
+    const orderID = generateOrderID()
+    const packageImage = req.file ? req.file.path : ''
+
+    const customer = customerId && customerId !== 'undefined' && customerId !== 'null'
+      ? customerId
+      : null
+
+    const order = await Order.create({
+      orderID,
+      customer,
+      customerName, customerPhone,
+      recipientName, recipientPhone,
+      pickupLocation, dropoffLocation,
+      pickupCoords: pickupCoords || null,
+      dropoffCoords: dropoffCoords || null,
+      distance: distance || 0,
+      deliveryType, scheduledDate, scheduledTime,
+      packageDescription, additionalNotes,
+      packageImage,
+      deliveryFee, paymentMethod,
+    })
+
+    res.status(201).json({ success: true, data: order })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}
+
+// GET /api/orders — admin gets all orders
+export const getAllOrders = async (req, res) => {
+  try {
+    const { status } = req.query
+    const filter = status ? { status } : {}
+    const orders = await Order.find(filter)
+      .populate('assignedRider', 'name phone email')
+      .sort({ createdAt: -1 })
+    res.json({ success: true, data: orders })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}
+
+// GET /api/orders/track/:orderID — public (customer tracks)
+export const trackOrder = async (req, res) => {
+  try {
+    const order = await Order.findOne({ orderID: req.params.orderID })
+      .populate('assignedRider', 'name phone')
+    if (!order) return res.status(404).json({ error: 'Order not found. Check your Order ID.' })
+    res.json({ success: true, data: order })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}
+
+// GET /api/orders/rider — rider gets assigned orders
+export const getRiderOrders = async (req, res) => {
+  try {
+    const orders = await Order.find({ assignedRider: req.rider.id })
+      .sort({ createdAt: -1 })
+    res.json({ success: true, data: orders })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}
+
+// PUT /api/orders/:id/assign — admin assigns rider
+export const assignRider = async (req, res) => {
+  try {
+    const { riderId } = req.body
+    const order = await Order.findByIdAndUpdate(
+      req.params.id,
+      { assignedRider: riderId, status: 'assigned' },
+      { new: true }
+    ).populate('assignedRider', 'name phone email')
+    res.json({ success: true, data: order })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}
+
+// PUT /api/orders/:id/status — admin or rider updates status
+export const updateOrderStatus = async (req, res) => {
+  try {
+    const { status } = req.body
+    const order = await Order.findByIdAndUpdate(
+      req.params.id,
+      { status },
+      { new: true }
+    ).populate('assignedRider', 'name phone')
+    res.json({ success: true, data: order })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}
+
+// PUT /api/orders/:id/proof — rider uploads proof of delivery
+export const uploadProof = async (req, res) => {
+  try {
+    const { proofRecipientName } = req.body
+    const proofPhoto = req.file ? req.file.path : ''
+    const order = await Order.findByIdAndUpdate(
+      req.params.id,
+      { proofPhoto, proofRecipientName, status: 'delivered' },
+      { new: true }
+    )
+    // Increment rider total deliveries
+    if (order.assignedRider) {
+      const Rider = (await import('../models/Rider.js')).default
+      await Rider.findByIdAndUpdate(order.assignedRider, { $inc: { totalDeliveries: 1 } })
+    }
+    res.json({ success: true, data: order })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}
+
+// GET /api/orders/stats — admin gets stats
+export const getStats = async (req, res) => {
+  try {
+    const total = await Order.countDocuments()
+    const pending = await Order.countDocuments({ status: { $in: ['received', 'assigned', 'picked-up', 'in-transit'] } })
+    const completed = await Order.countDocuments({ status: 'delivered' })
+    const cancelled = await Order.countDocuments({ status: 'cancelled' })
+    const revenue = await Order.aggregate([
+      { $match: { status: 'delivered' } },
+      { $group: { _id: null, total: { $sum: '$deliveryFee' } } }
+    ])
+    res.json({
+      success: true,
+      data: {
+        total, pending, completed, cancelled,
+        revenue: revenue[0]?.total || 0,
+      }
+    })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}
+
+// GET /api/orders/available — rider sees all unassigned orders
+export const getAvailableOrders = async (req, res) => {
+  try {
+    const orders = await Order.find({
+      status: 'received',
+      assignedRider: null,
+    }).sort({ createdAt: -1 })
+    res.json({ success: true, data: orders })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}
+
+// PUT /api/orders/:id/self-assign — rider accepts available order
+export const selfAssignOrder = async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id)
+    if (!order) return res.status(404).json({ error: 'Order not found.' })
+    if (order.assignedRider) return res.status(400).json({ error: 'This order has already been taken by another rider.' })
+    if (order.status !== 'received') return res.status(400).json({ error: 'This order is no longer available.' })
+
+    const updated = await Order.findByIdAndUpdate(
+      req.params.id,
+      { assignedRider: req.rider.id, status: 'assigned' },
+      { new: true }
+    ).populate('assignedRider', 'name phone')
+
+    res.json({ success: true, data: updated })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}
