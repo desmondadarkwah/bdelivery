@@ -9,7 +9,7 @@ export const createRider = async (req, res) => {
     const { name, email, password, phone } = req.body
     const exists = await Rider.findOne({ email })
     if (exists) return res.status(400).json({ error: 'Rider with this email already exists.' })
-    const rider = await Rider.create({ name, email, password, phone })
+    const rider = await Rider.create({ name, email, password, phone, tenantId: req.tenantId })
     res.status(201).json({ success: true, data: rider })
   } catch (err) {
     res.status(500).json({ error: err.message })
@@ -20,7 +20,9 @@ export const createRider = async (req, res) => {
 export const loginRider = async (req, res) => {
   try {
     const { email, password } = req.body
-    const rider = await Rider.findOne({ email })
+    const subdomain = req.headers['x-tenant-subdomain']
+    const tenant = req.tenant
+    const rider = await Rider.findOne({ email, tenantId: tenant?._id?.toString() })
     if (!rider || !(await rider.matchPassword(password)))
       return res.status(401).json({ error: 'Invalid email or password.' })
     if (rider.status === 'suspended')
@@ -38,7 +40,7 @@ export const loginRider = async (req, res) => {
 // GET /api/riders — admin gets all riders
 export const getAllRiders = async (req, res) => {
   try {
-    const riders = await Rider.find().select('-password').sort({ createdAt: -1 })
+    const riders = await Rider.find({ tenantId: req.tenantId }).select('-password').sort({ createdAt: -1 })
     res.json({ success: true, data: riders })
   } catch (err) {
     res.status(500).json({ error: err.message })

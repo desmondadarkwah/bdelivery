@@ -18,12 +18,10 @@ mongoose.connect(process.env.MONGO_URI)
   .then(() => {
     console.log('✅ MongoDB connected successfully')
     app.listen(PORT, () => {
-      console.log(`✅ SwiftByGwyn server running on http://localhost:${PORT}`)
+      console.log(`✅ bdelivery server running on http://localhost:${PORT}`)
     })
   })
   .catch((err) => {
     console.error('❌ MongoDB connection failed:', err.message)
   })
-
-
 

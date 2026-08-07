@@ -1,6 +1,11 @@
 import mongoose from 'mongoose'
 
 const orderSchema = new mongoose.Schema({
+
+  //tenant
+  tenantId: { type: String, required: true, index: true },
+
+  
   orderID: { type: String, unique: true },
 
   // Customer info

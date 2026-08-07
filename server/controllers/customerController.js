@@ -11,7 +11,7 @@ export const registerCustomer = async (req, res) => {
     if (!name || !email || !password) return res.status(400).json({ error: 'Name, email and password are required.' })
     const exists = await Customer.findOne({ email })
     if (exists) return res.status(400).json({ error: 'An account with this email already exists.' })
-    const customer = await Customer.create({ name, email, password, phone })
+    const customer = await Customer.create({ name, email, password, phone, tenantId: req.tenantId })
     res.status(201).json({
       success: true,
       token: generateToken(customer._id),
@@ -24,7 +24,7 @@ export const registerCustomer = async (req, res) => {
 export const loginCustomer = async (req, res) => {
   try {
     const { email, password } = req.body
-    const customer = await Customer.findOne({ email })
+    const customer = await Customer.findOne({ email, tenantId: req.tenantId })
     if (!customer || !(await customer.matchPassword(password)))
       return res.status(401).json({ error: 'Invalid email or password.' })
     res.json({
@@ -38,7 +38,7 @@ export const loginCustomer = async (req, res) => {
 // GET /api/customers/me
 export const getCustomerMe = async (req, res) => {
   try {
-    const customer = await Customer.findById(req.customer.id).select('-password')
+    const orders = await Order.find({ customer: req.customer.id, tenantId: req.tenantId })
     res.json({ success: true, customer })
   } catch (err) { res.status(500).json({ error: err.message }) }
 }
@@ -82,7 +82,7 @@ export const getCustomerOrders = async (req, res) => {
 // GET /api/customers/all — admin only
 export const getAllCustomers = async (req, res) => {
   try {
-    const customers = await Customer.find().select('-password').sort({ createdAt: -1 })
+    const customers = await Customer.find({ tenantId: req.tenantId }).select('-password').sort({ createdAt: -1 })
     res.json({ success: true, data: customers })
   } catch (err) { res.status(500).json({ error: err.message }) }
 }

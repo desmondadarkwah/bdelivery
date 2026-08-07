@@ -39,6 +39,7 @@ export const createOrder = async (req, res) => {
 
     const order = await Order.create({
       orderID,
+      tenantId: req.tenantId,
       customer,
       customerName, customerPhone,
       recipientName, recipientPhone,
@@ -62,7 +63,7 @@ export const createOrder = async (req, res) => {
 export const getAllOrders = async (req, res) => {
   try {
     const { status } = req.query
-    const filter = status ? { status } : {}
+    const filter = status ? { status, tenantId: req.tenantId } : { tenantId: req.tenantId }
     const orders = await Order.find(filter)
       .populate('assignedRider', 'name phone email')
       .sort({ createdAt: -1 })
@@ -75,7 +76,7 @@ export const getAllOrders = async (req, res) => {
 // GET /api/orders/track/:orderID — public (customer tracks)
 export const trackOrder = async (req, res) => {
   try {
-    const order = await Order.findOne({ orderID: req.params.orderID })
+    const order = await Order.findOne({ orderID: req.params.orderID, tenantId: req.tenantId })
       .populate('assignedRider', 'name phone')
     if (!order) return res.status(404).json({ error: 'Order not found. Check your Order ID.' })
     res.json({ success: true, data: order })
@@ -87,7 +88,7 @@ export const trackOrder = async (req, res) => {
 // GET /api/orders/rider — rider gets assigned orders
 export const getRiderOrders = async (req, res) => {
   try {
-    const orders = await Order.find({ assignedRider: req.rider.id })
+    const orders = await Order.find({ assignedRider: req.rider.id, tenantId: req.tenantId })
       .sort({ createdAt: -1 })
     res.json({ success: true, data: orders })
   } catch (err) {
@@ -149,12 +150,12 @@ export const uploadProof = async (req, res) => {
 // GET /api/orders/stats — admin gets stats
 export const getStats = async (req, res) => {
   try {
-    const total = await Order.countDocuments()
-    const pending = await Order.countDocuments({ status: { $in: ['received', 'assigned', 'picked-up', 'in-transit'] } })
-    const completed = await Order.countDocuments({ status: 'delivered' })
-    const cancelled = await Order.countDocuments({ status: 'cancelled' })
+    const total = await Order.countDocuments({ tenantId: req.tenantId })
+    const pending = await Order.countDocuments({ tenantId: req.tenantId, status: { $in: ['received', 'assigned', 'picked-up', 'in-transit'] } })
+    const completed = await Order.countDocuments({ tenantId: req.tenantId, status: 'delivered' })
+    const cancelled = await Order.countDocuments({ tenantId: req.tenantId, status: 'cancelled' })
     const revenue = await Order.aggregate([
-      { $match: { status: 'delivered' } },
+      { $match: { tenantId: req.tenantId, status: 'delivered' } },
       { $group: { _id: null, total: { $sum: '$deliveryFee' } } }
     ])
     res.json({
@@ -175,6 +176,7 @@ export const getAvailableOrders = async (req, res) => {
     const orders = await Order.find({
       status: 'received',
       assignedRider: null,
+      tenantId: req.tenantId,
     }).sort({ createdAt: -1 })
     res.json({ success: true, data: orders })
   } catch (err) {
