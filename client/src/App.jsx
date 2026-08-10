@@ -9,9 +9,12 @@ import RiderDashboard from './pages/RiderDashboard'
 import CustomerLogin from './pages/CustomerLogin'
 import CustomerRegister from './pages/CustomerRegister'
 import CustomerAccount from './pages/CustomerAccount'
+import SuperAdminLogin from './pages/SuperAdminLogin'
+import SuperAdminDashboard from './pages/SuperAdminDashboard'
 import NotFound from './pages/NotFound'
 import AdminProtectedRoute from './components/AdminProtectedRoute'
 import RiderProtectedRoute from './components/RiderProtectedRoute'
+import SuperAdminProtectedRoute from './components/SuperAdminProtectedRoute'
 
 function App() {
   return (
@@ -34,6 +37,12 @@ function App() {
         <RiderProtectedRoute>
           <RiderDashboard />
         </RiderProtectedRoute>
+      } />
+      <Route path="/super/login" element={<SuperAdminLogin />} />
+      <Route path="/super" element={
+        <SuperAdminProtectedRoute>
+          <SuperAdminDashboard />
+        </SuperAdminProtectedRoute>
       } />
       <Route path="*" element={<NotFound />} />
     </Routes>
