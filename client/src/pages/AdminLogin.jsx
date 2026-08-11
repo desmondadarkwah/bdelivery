@@ -11,17 +11,20 @@ export default function AdminLogin() {
   const { login } = useAdminAuth()
   const navigate  = useNavigate()
 
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    setLoading(true); setError('')
-    try {
-      const data = await loginAdmin({ email, password })
-      if (data.success) { login(data.token); navigate('/admin') }
-      else setError(data.error || 'Login failed.')
-    } catch (err) {
-      setError(err.response?.data?.error || 'Invalid email or password.')
-    } finally { setLoading(false) }
-  }
+const handleSubmit = async (e) => {
+  e.preventDefault()
+  setLoading(true); setError('')
+  try {
+    const subdomain = localStorage.getItem('dev_subdomain') || 'swiftbygwyn'
+    const data = await loginAdmin({ email, password, subdomain })
+    if (data.success) {
+      login(data.token, data.tenant)
+      navigate('/admin')
+    } else setError(data.error || 'Login failed.')
+  } catch (err) {
+    setError(err.response?.data?.error || 'Invalid email or password.')
+  } finally { setLoading(false) }
+}
 
   return (
     <>
