@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAdminAuth } from '../context/AdminAuthContext'
+import { useTenant } from '../context/TenantContext'
 import {
   getStats, getAllOrders, getAllRiders,
   createRider, updateRiderStatus, deleteRider,
@@ -30,8 +31,6 @@ const DELIVERY_TYPE_LABELS = {
   express: 'Express', scheduled: 'Scheduled',
 }
 
-const SITE_URL = 'https://swiftbygwyn.vercel.app'
-
 function StatusBadge({ status }) {
   const c = STATUS_COLORS[status] || STATUS_COLORS.received
   return (
@@ -41,7 +40,7 @@ function StatusBadge({ status }) {
   )
 }
 
-function SettingsTab() {
+function SettingsTab({ brand }) {
   const [form, setForm] = useState({
     businessName:'', whatsapp:'', email:'', phone:'',
     address:'', coverageArea:'',
@@ -190,7 +189,7 @@ function CustomersTab() {
     .catch(console.error)
 
   const del = async (id) => {
-    if (!confirm('Delete this customer? This cannot be undone.')) return
+    if (!confirm('Delete this customer?')) return
     await deleteCustomer(id); load()
   }
 
@@ -209,9 +208,7 @@ function CustomersTab() {
       </div>
       <div className="adm-table-wrap">
         <table className="adm-table">
-          <thead>
-            <tr><th>Name</th><th>Email</th><th>Phone</th><th>Joined</th><th>Actions</th></tr>
-          </thead>
+          <thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Joined</th><th>Actions</th></tr></thead>
           <tbody>
             {loading ? (
               <tr><td colSpan={5}><div className="adm-empty">Loading...</div></td></tr>
@@ -222,7 +219,7 @@ function CustomersTab() {
                 <tr key={c._id}>
                   <td>
                     <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-                      <div style={{ width:34, height:34, background:'rgba(249,115,22,0.12)', border:'1px solid rgba(249,115,22,0.2)', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:14, color:'#f97316', flexShrink:0 }}>
+                      <div style={{ width:34, height:34, background:'rgba(249,115,22,0.12)', border:'1px solid rgba(249,115,22,0.2)', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:14, color:'var(--brand)', flexShrink:0 }}>
                         {c.name?.charAt(0).toUpperCase()}
                       </div>
                       <div className="adm-table-name">{c.name}</div>
@@ -244,7 +241,14 @@ function CustomersTab() {
 
 export default function AdminDashboard() {
   const { logout } = useAdminAuth()
+  const { tenant } = useTenant()
+  const { adminTenant } = useAdminAuth()
   const navigate   = useNavigate()
+
+  const brand = tenant || adminTenant
+  const SITE_URL = `https://${brand?.subdomain || 'swiftbygwyn'}.bdelivery.com`
+  const brandColor = brand?.brandColor || '#f97316'
+
   const [activeTab, setActiveTab]     = useState('overview')
   const [stats, setStats]             = useState(null)
   const [orders, setOrders]           = useState([])
@@ -320,18 +324,19 @@ export default function AdminDashboard() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Syne:wght@600;700;800&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
+        :root { --brand: ${brandColor}; }
         .adm-root { min-height: 100vh; background: #0b0f1a; font-family: 'Inter', sans-serif; color: #f0f4ff; display: flex; }
         .adm-sidebar { width: 220px; flex-shrink: 0; background: rgba(255,255,255,0.03); border-right: 1px solid rgba(255,255,255,0.06); display: flex; flex-direction: column; padding: 24px 0; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
         .adm-sidebar-logo { display: flex; align-items: center; gap: 10px; padding: 0 20px 24px; border-bottom: 1px solid rgba(255,255,255,0.06); margin-bottom: 16px; text-decoration: none; }
-        .adm-sidebar-logo-icon { width: 34px; height: 34px; background: #f97316; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0; }
+        .adm-sidebar-logo-icon { width: 34px; height: 34px; background: var(--brand); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0; }
         .adm-sidebar-logo-text { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 15px; color: #fff; }
         .adm-nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 20px; font-size: 13px; font-weight: 500; color: rgba(240,244,255,0.45); cursor: pointer; transition: all 0.2s; border-left: 2px solid transparent; }
         .adm-nav-item:hover { color: #fff; background: rgba(255,255,255,0.04); }
-        .adm-nav-item.active { color: #f97316; background: rgba(249,115,22,0.08); border-left-color: #f97316; }
+        .adm-nav-item.active { color: var(--brand); background: rgba(255,255,255,0.06); border-left-color: var(--brand); }
         .adm-nav-icon { font-size: 16px; }
         .adm-sidebar-bottom { margin-top: auto; padding: 16px 20px; border-top: 1px solid rgba(255,255,255,0.06); }
         .adm-logout-btn { width: 100%; padding: 10px; background: transparent; color: rgba(240,244,255,0.35); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; font-size: 12px; font-weight: 500; cursor: pointer; transition: all 0.2s; }
-        .adm-logout-btn:hover { border-color: #f97316; color: #f97316; }
+        .adm-logout-btn:hover { border-color: var(--brand); color: var(--brand); }
         .adm-main { flex: 1; padding: 32px; overflow-x: hidden; }
         .adm-page-title { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 24px; color: #fff; margin-bottom: 24px; }
         .adm-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; margin-bottom: 28px; }
@@ -341,8 +346,8 @@ export default function AdminDashboard() {
         .adm-stat-icon { position: absolute; top: 16px; right: 16px; font-size: 22px; opacity: 0.2; }
         .adm-filters { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
         .adm-filter-btn { padding: 7px 16px; border-radius: 100px; font-size: 12px; font-weight: 500; cursor: pointer; transition: all 0.2s; border: 1px solid rgba(255,255,255,0.08); background: transparent; color: rgba(240,244,255,0.4); }
-        .adm-filter-btn:hover { border-color: rgba(249,115,22,0.4); color: #f97316; }
-        .adm-filter-btn.active { background: #f97316; color: #fff; border-color: #f97316; }
+        .adm-filter-btn:hover { border-color: var(--brand); color: var(--brand); }
+        .adm-filter-btn.active { background: var(--brand); color: #fff; border-color: var(--brand); }
         .adm-table-wrap { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: 16px; overflow: hidden; }
         .adm-table { width: 100%; border-collapse: collapse; }
         .adm-table th { padding: 14px 16px; text-align: left; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(240,244,255,0.3); border-bottom: 1px solid rgba(255,255,255,0.06); background: rgba(255,255,255,0.02); }
@@ -352,8 +357,8 @@ export default function AdminDashboard() {
         .adm-table-name { font-weight: 600; color: #fff; margin-bottom: 2px; }
         .adm-table-sub { font-size: 11px; color: rgba(240,244,255,0.35); }
         .adm-btn-sm { padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: 500; cursor: pointer; transition: all 0.2s; border: none; }
-        .adm-btn-orange { background: rgba(249,115,22,0.15); color: #f97316; border: 1px solid rgba(249,115,22,0.3); }
-        .adm-btn-orange:hover { background: #f97316; color: #fff; }
+        .adm-btn-orange { background: rgba(249,115,22,0.15); color: var(--brand); border: 1px solid rgba(249,115,22,0.3); }
+        .adm-btn-orange:hover { background: var(--brand); color: #fff; }
         .adm-btn-red { background: rgba(239,68,68,0.15); color: #fca5a5; border: 1px solid rgba(239,68,68,0.3); }
         .adm-btn-red:hover { background: #ef4444; color: #fff; }
         .adm-btn-green { background: rgba(34,197,94,0.15); color: #86efac; border: 1px solid rgba(34,197,94,0.3); }
@@ -376,14 +381,14 @@ export default function AdminDashboard() {
         .adm-form-field { margin-bottom: 14px; }
         .adm-form-label { display: block; font-size: 12px; font-weight: 500; color: rgba(240,244,255,0.4); margin-bottom: 6px; }
         .adm-form-input { width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.09); border-radius: 10px; padding: 11px 14px; font-size: 13px; color: #fff; outline: none; font-family: 'Inter', sans-serif; transition: border-color 0.2s; }
-        .adm-form-input:focus { border-color: #f97316; }
+        .adm-form-input:focus { border-color: var(--brand); }
         .adm-form-error { font-size: 12px; color: #fca5a5; margin-bottom: 12px; padding: 10px; background: rgba(239,68,68,0.1); border-radius: 8px; }
-        .adm-form-btn { width: 100%; padding: 13px; background: #f97316; color: #fff; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; transition: opacity 0.2s; }
+        .adm-form-btn { width: 100%; padding: 13px; background: var(--brand); color: #fff; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; transition: opacity 0.2s; }
         .adm-form-btn:disabled { opacity: 0.45; cursor: not-allowed; }
         .adm-empty { padding: 48px; text-align: center; color: rgba(240,244,255,0.25); font-size: 14px; }
-        .adm-add-btn { padding: 10px 20px; background: #f97316; color: #fff; border: none; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; margin-bottom: 20px; }
+        .adm-add-btn { padding: 10px 20px; background: var(--brand); color: #fff; border: none; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; margin-bottom: 20px; }
         .adm-search { width: 100%; max-width: 320px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.09); border-radius: 10px; padding: 10px 14px; font-size: 13px; color: #fff; outline: none; margin-bottom: 20px; font-family: 'Inter', sans-serif; }
-        .adm-search:focus { border-color: #f97316; }
+        .adm-search:focus { border-color: var(--brand); }
         .adm-search::placeholder { color: rgba(240,244,255,0.2); }
         .adm-wa-btns { display: flex; flex-direction: column; gap: 8px; }
         @media (max-width: 768px) {
@@ -399,8 +404,11 @@ export default function AdminDashboard() {
       <div className="adm-root">
         <aside className="adm-sidebar">
           <a href="/" className="adm-sidebar-logo">
-            <div className="adm-sidebar-logo-icon">🚀</div>
-            <div className="adm-sidebar-logo-text">SwiftByGwyn</div>
+            {brand?.logo
+              ? <img src={brand.logo} alt="logo" style={{ width:34, height:34, borderRadius:8, objectFit:'cover', flexShrink:0 }} />
+              : <div className="adm-sidebar-logo-icon">🚀</div>
+            }
+            <div className="adm-sidebar-logo-text">{brand?.businessName || 'Dashboard'}</div>
           </a>
           {[
             { id:'overview',   icon:'📊', label:'Overview' },
@@ -431,7 +439,7 @@ export default function AdminDashboard() {
                 <>
                   <div className="adm-stats">
                     {[
-                      { label:'Total Orders',  value: stats?.total || 0,     icon:'📦', color:'#f97316' },
+                      { label:'Total Orders',  value: stats?.total || 0,     icon:'📦', color: brandColor },
                       { label:'Pending',       value: stats?.pending || 0,   icon:'⏳', color:'#f59e0b' },
                       { label:'Completed',     value: stats?.completed || 0, icon:'✅', color:'#22c55e' },
                       { label:'Cancelled',     value: stats?.cancelled || 0, icon:'❌', color:'#ef4444' },
@@ -453,12 +461,12 @@ export default function AdminDashboard() {
                       <tbody>
                         {orders.slice(0,8).map(o => (
                           <tr key={o._id} style={{ cursor:'pointer' }} onClick={() => setSelectedOrder(o)}>
-                            <td><span style={{ color:'#f97316', fontWeight:700 }}>{o.orderID}</span></td>
+                            <td><span style={{ color: brandColor, fontWeight:700 }}>{o.orderID}</span></td>
                             <td><div className="adm-table-name">{o.customerName}</div><div className="adm-table-sub">{o.customerPhone}</div></td>
                             <td><div style={{ fontSize:12 }}>{o.pickupLocation}</div><div className="adm-table-sub">→ {o.dropoffLocation}</div></td>
                             <td><span style={{ fontSize:11, color:'rgba(240,244,255,0.5)' }}>{DELIVERY_TYPE_LABELS[o.deliveryType]}</span></td>
                             <td><StatusBadge status={o.status} /></td>
-                            <td style={{ color:'#f97316', fontWeight:600 }}>GHS {o.deliveryFee}</td>
+                            <td style={{ color: brandColor, fontWeight:600 }}>GHS {o.deliveryFee}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -494,14 +502,14 @@ export default function AdminDashboard() {
                   <tbody>
                     {orders.map(o => (
                       <tr key={o._id}>
-                        <td><span style={{ color:'#f97316', fontWeight:700 }}>{o.orderID}</span></td>
+                        <td><span style={{ color: brandColor, fontWeight:700 }}>{o.orderID}</span></td>
                         <td><div className="adm-table-name">{o.customerName}</div><div className="adm-table-sub">{o.customerPhone}</div></td>
                         <td><div className="adm-table-name">{o.recipientName}</div><div className="adm-table-sub">{o.recipientPhone}</div></td>
                         <td><div style={{ fontSize:12 }}>{o.pickupLocation}</div><div className="adm-table-sub">→ {o.dropoffLocation}</div></td>
                         <td><span style={{ fontSize:11, color:'rgba(240,244,255,0.5)' }}>{DELIVERY_TYPE_LABELS[o.deliveryType]}</span></td>
                         <td><span style={{ fontSize:12, color: o.assignedRider ? '#86efac' : 'rgba(240,244,255,0.25)' }}>{o.assignedRider?.name || 'Unassigned'}</span></td>
                         <td><StatusBadge status={o.status} /></td>
-                        <td style={{ color:'#f97316', fontWeight:600 }}>GHS {o.deliveryFee}</td>
+                        <td style={{ color: brandColor, fontWeight:600 }}>GHS {o.deliveryFee}</td>
                         <td><button className="adm-btn-sm adm-btn-orange" onClick={() => setSelectedOrder(o)}>Manage</button></td>
                       </tr>
                     ))}
@@ -526,7 +534,7 @@ export default function AdminDashboard() {
                         <td><div className="adm-table-name">{r.name}</div></td>
                         <td><span style={{ fontSize:12 }}>{r.email}</span></td>
                         <td><span style={{ fontSize:12 }}>{r.phone}</span></td>
-                        <td><span style={{ color:'#f97316', fontWeight:600 }}>{r.totalDeliveries}</span></td>
+                        <td><span style={{ color: brandColor, fontWeight:600 }}>{r.totalDeliveries}</span></td>
                         <td>
                           <span style={{ padding:'4px 10px', borderRadius:100, fontSize:11, fontWeight:600, background: r.status==='active' ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)', color: r.status==='active' ? '#86efac' : '#fca5a5', border:`1px solid ${r.status==='active' ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'}` }}>
                             {r.status === 'active' ? 'Active' : 'Suspended'}
@@ -560,7 +568,7 @@ export default function AdminDashboard() {
                 {[
                   { label:'Delivered',    value: deliveredOrders.length,  color:'rgba(34,197,94,0.08)',  border:'rgba(34,197,94,0.2)',  text:'#86efac' },
                   { label:'Cancelled',    value: cancelledOrders.length,  color:'rgba(239,68,68,0.08)',  border:'rgba(239,68,68,0.2)',  text:'#fca5a5' },
-                  { label:'Total Revenue',value: `GHS ${deliveredOrders.reduce((s,o) => s+(o.deliveryFee||0),0)}`, color:'rgba(249,115,22,0.08)', border:'rgba(249,115,22,0.2)', text:'#f97316' },
+                  { label:'Total Revenue',value: `GHS ${deliveredOrders.reduce((s,o) => s+(o.deliveryFee||0),0)}`, color:'rgba(249,115,22,0.08)', border:'rgba(249,115,22,0.2)', text: brandColor },
                 ].map(s => (
                   <div key={s.label} style={{ background:s.color, border:`1px solid ${s.border}`, borderRadius:12, padding:'12px 20px' }}>
                     <div style={{ fontSize:20, fontWeight:800, color:s.text, fontFamily:"'Syne',sans-serif" }}>{s.value}</div>
@@ -574,13 +582,13 @@ export default function AdminDashboard() {
                   <tbody>
                     {historyOrders.map(o => (
                       <tr key={o._id}>
-                        <td><span style={{ color:'#f97316', fontWeight:700 }}>{o.orderID}</span></td>
+                        <td><span style={{ color: brandColor, fontWeight:700 }}>{o.orderID}</span></td>
                         <td><div className="adm-table-name">{o.customerName}</div><div className="adm-table-sub">{o.customerPhone}</div></td>
                         <td><div className="adm-table-name">{o.recipientName}</div><div className="adm-table-sub">{o.recipientPhone}</div></td>
                         <td><div style={{ fontSize:12 }}>{o.pickupLocation}</div><div className="adm-table-sub">→ {o.dropoffLocation}</div></td>
                         <td><span style={{ fontSize:12, color:'rgba(240,244,255,0.5)' }}>{o.assignedRider?.name || '—'}</span></td>
                         <td><StatusBadge status={o.status} /></td>
-                        <td style={{ color:'#f97316', fontWeight:600 }}>GHS {o.deliveryFee}</td>
+                        <td style={{ color: brandColor, fontWeight:600 }}>GHS {o.deliveryFee}</td>
                         <td style={{ fontSize:11, color:'rgba(240,244,255,0.35)' }}>{new Date(o.createdAt).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}</td>
                         <td><button className="adm-btn-sm adm-btn-orange" onClick={() => setSelectedOrder(o)}>View</button></td>
                       </tr>
@@ -608,9 +616,9 @@ export default function AdminDashboard() {
                     { label:'Registered Customers', value: customers.length, icon:'👥', desc:'Total accounts created' },
                     { label:'Active Riders',        value: riders.filter(r=>r.status==='active').length, icon:'🏍️', desc:'Available for delivery' },
                   ].map(s => (
-                    <div key={s.label} className="adm-stat" style={{ borderTop:'2px solid #f97316' }}>
+                    <div key={s.label} className="adm-stat" style={{ borderTop:`2px solid ${brandColor}` }}>
                       <div className="adm-stat-icon">{s.icon}</div>
-                      <div className="adm-stat-num" style={{ color:'#f97316', fontSize:26 }}>{s.value}</div>
+                      <div className="adm-stat-num" style={{ color: brandColor, fontSize:26 }}>{s.value}</div>
                       <div className="adm-stat-label">{s.label}</div>
                       <div style={{ fontSize:11, color:'rgba(240,244,255,0.2)', marginTop:4 }}>{s.desc}</div>
                     </div>
@@ -626,7 +634,7 @@ export default function AdminDashboard() {
                       <tr key={r._id}>
                         <td><div className="adm-table-name">{r.name}</div><div className="adm-table-sub">{r.email}</div></td>
                         <td>{r.phone}</td>
-                        <td><span style={{ color:'#f97316', fontWeight:700, fontSize:16 }}>{r.totalDeliveries}</span></td>
+                        <td><span style={{ color: brandColor, fontWeight:700, fontSize:16 }}>{r.totalDeliveries}</span></td>
                         <td><span style={{ fontSize:11, color: r.status==='active' ? '#86efac' : '#fca5a5' }}>{r.status}</span></td>
                       </tr>
                     ))}
@@ -637,7 +645,7 @@ export default function AdminDashboard() {
             </div>
           )}
 
-          {activeTab === 'settings' && <SettingsTab />}
+          {activeTab === 'settings' && <SettingsTab brand={brand} />}
           {activeTab === 'account'  && <AccountTab />}
         </main>
       </div>
@@ -649,7 +657,7 @@ export default function AdminDashboard() {
             <div className="adm-modal-head">
               <div>
                 <div style={{ fontSize:11, color:'rgba(240,244,255,0.35)', marginBottom:4 }}>Order Details</div>
-                <div className="adm-modal-title" style={{ color:'#f97316' }}>{selectedOrder.orderID}</div>
+                <div className="adm-modal-title" style={{ color: brandColor }}>{selectedOrder.orderID}</div>
               </div>
               <div style={{ display:'flex', alignItems:'center', gap:10 }}>
                 <StatusBadge status={selectedOrder.status} />
@@ -663,12 +671,12 @@ export default function AdminDashboard() {
                   <div className="adm-modal-item">
                     <div className="adm-modal-item-label">Customer</div>
                     <div className="adm-modal-item-value">{selectedOrder.customerName}</div>
-                    <div style={{ fontSize:12, marginTop:4 }}><a href={`tel:${selectedOrder.customerPhone}`} style={{ color:'#f97316' }}>{selectedOrder.customerPhone}</a></div>
+                    <div style={{ fontSize:12, marginTop:4 }}><a href={`tel:${selectedOrder.customerPhone}`} style={{ color: brandColor }}>{selectedOrder.customerPhone}</a></div>
                   </div>
                   <div className="adm-modal-item">
                     <div className="adm-modal-item-label">Recipient</div>
                     <div className="adm-modal-item-value">{selectedOrder.recipientName}</div>
-                    <div style={{ fontSize:12, marginTop:4 }}><a href={`tel:${selectedOrder.recipientPhone}`} style={{ color:'#f97316' }}>{selectedOrder.recipientPhone}</a></div>
+                    <div style={{ fontSize:12, marginTop:4 }}><a href={`tel:${selectedOrder.recipientPhone}`} style={{ color: brandColor }}>{selectedOrder.recipientPhone}</a></div>
                   </div>
                 </div>
               </div>
@@ -676,16 +684,16 @@ export default function AdminDashboard() {
               <div className="adm-modal-section">
                 <div className="adm-modal-section-title">Notify Recipient via WhatsApp</div>
                 <div className="adm-wa-btns">
-                  <a href={`https://wa.me/${selectedOrder.recipientPhone?.replace(/\D/g,'')}?text=${encodeURIComponent(`SwiftByGwyn Delivery Service: A package has been scheduled for delivery to you. Order ID: ${selectedOrder.orderID}. Track here: ${SITE_URL}/track/${selectedOrder.orderID}`)}`} target="_blank" rel="noreferrer" style={{ display:'flex', alignItems:'center', gap:10, padding:'11px 14px', background:'rgba(37,211,102,0.08)', border:'1px solid rgba(37,211,102,0.2)', borderRadius:10, color:'#4ade80', fontSize:13, fontWeight:600, textDecoration:'none' }}>
+                  <a href={`https://wa.me/${selectedOrder.recipientPhone?.replace(/\D/g,'')}?text=${encodeURIComponent(`${brand?.businessName || 'Delivery Service'}: A package has been scheduled for delivery to you. Order ID: ${selectedOrder.orderID}. Track here: ${SITE_URL}/track/${selectedOrder.orderID}`)}`} target="_blank" rel="noreferrer" style={{ display:'flex', alignItems:'center', gap:10, padding:'11px 14px', background:'rgba(37,211,102,0.08)', border:'1px solid rgba(37,211,102,0.2)', borderRadius:10, color:'#4ade80', fontSize:13, fontWeight:600, textDecoration:'none' }}>
                     📦 Notify: Package Booked for You
                   </a>
                   {['assigned','accepted','picked-up','in-transit'].includes(selectedOrder.status) && (
-                    <a href={`https://wa.me/${selectedOrder.recipientPhone?.replace(/\D/g,'')}?text=${encodeURIComponent(`SwiftByGwyn Delivery Service: Your package (Order ID: ${selectedOrder.orderID}) is on the way! Track here: ${SITE_URL}/track/${selectedOrder.orderID}`)}`} target="_blank" rel="noreferrer" style={{ display:'flex', alignItems:'center', gap:10, padding:'11px 14px', background:'rgba(59,130,246,0.08)', border:'1px solid rgba(59,130,246,0.2)', borderRadius:10, color:'#93c5fd', fontSize:13, fontWeight:600, textDecoration:'none' }}>
+                    <a href={`https://wa.me/${selectedOrder.recipientPhone?.replace(/\D/g,'')}?text=${encodeURIComponent(`${brand?.businessName || 'Delivery Service'}: Your package (Order ID: ${selectedOrder.orderID}) is on the way! Track here: ${SITE_URL}/track/${selectedOrder.orderID}`)}`} target="_blank" rel="noreferrer" style={{ display:'flex', alignItems:'center', gap:10, padding:'11px 14px', background:'rgba(59,130,246,0.08)', border:'1px solid rgba(59,130,246,0.2)', borderRadius:10, color:'#93c5fd', fontSize:13, fontWeight:600, textDecoration:'none' }}>
                       🏍️ Notify: Rider On The Way
                     </a>
                   )}
                   {selectedOrder.status === 'delivered' && (
-                    <a href={`https://wa.me/${selectedOrder.recipientPhone?.replace(/\D/g,'')}?text=${encodeURIComponent(`SwiftByGwyn Delivery Service: Your package (Order ID: ${selectedOrder.orderID}) has been delivered! Thank you for using SwiftByGwyn.`)}`} target="_blank" rel="noreferrer" style={{ display:'flex', alignItems:'center', gap:10, padding:'11px 14px', background:'rgba(34,197,94,0.08)', border:'1px solid rgba(34,197,94,0.2)', borderRadius:10, color:'#86efac', fontSize:13, fontWeight:600, textDecoration:'none' }}>
+                    <a href={`https://wa.me/${selectedOrder.recipientPhone?.replace(/\D/g,'')}?text=${encodeURIComponent(`${brand?.businessName || 'Delivery Service'}: Your package (Order ID: ${selectedOrder.orderID}) has been delivered! Thank you.`)}`} target="_blank" rel="noreferrer" style={{ display:'flex', alignItems:'center', gap:10, padding:'11px 14px', background:'rgba(34,197,94,0.08)', border:'1px solid rgba(34,197,94,0.2)', borderRadius:10, color:'#86efac', fontSize:13, fontWeight:600, textDecoration:'none' }}>
                       ✅ Notify: Package Delivered
                     </a>
                   )}
@@ -698,14 +706,14 @@ export default function AdminDashboard() {
                   <div className="adm-modal-item"><div className="adm-modal-item-label">Pickup</div><div className="adm-modal-item-value">{selectedOrder.pickupLocation}</div></div>
                   <div className="adm-modal-item"><div className="adm-modal-item-label">Drop-off</div><div className="adm-modal-item-value">{selectedOrder.dropoffLocation}</div></div>
                   <div className="adm-modal-item"><div className="adm-modal-item-label">Type</div><div className="adm-modal-item-value">{DELIVERY_TYPE_LABELS[selectedOrder.deliveryType]}</div></div>
-                  <div className="adm-modal-item"><div className="adm-modal-item-label">Fee</div><div className="adm-modal-item-value" style={{ color:'#f97316' }}>GHS {selectedOrder.deliveryFee}</div></div>
+                  <div className="adm-modal-item"><div className="adm-modal-item-label">Fee</div><div className="adm-modal-item-value" style={{ color: brandColor }}>GHS {selectedOrder.deliveryFee}</div></div>
                   <div className="adm-modal-item"><div className="adm-modal-item-label">Payment</div><div className="adm-modal-item-value" style={{ textTransform:'capitalize' }}>{selectedOrder.paymentMethod?.replace('-',' ')}</div></div>
                   <div className="adm-modal-item"><div className="adm-modal-item-label">Booked</div><div className="adm-modal-item-value">{new Date(selectedOrder.createdAt).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}</div></div>
                   {selectedOrder.distance > 0 && <div className="adm-modal-item"><div className="adm-modal-item-label">Distance</div><div className="adm-modal-item-value">{selectedOrder.distance} km</div></div>}
                   {selectedOrder.deliveryType === 'scheduled' && (
                     <div className="adm-modal-item" style={{ gridColumn:'1/-1' }}>
                       <div className="adm-modal-item-label">Scheduled For</div>
-                      <div className="adm-modal-item-value" style={{ color:'#f97316' }}>{selectedOrder.scheduledDate} at {selectedOrder.scheduledTime}</div>
+                      <div className="adm-modal-item-value" style={{ color: brandColor }}>{selectedOrder.scheduledDate} at {selectedOrder.scheduledTime}</div>
                     </div>
                   )}
                 </div>
