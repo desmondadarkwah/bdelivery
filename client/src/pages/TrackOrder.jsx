@@ -1,365 +1,283 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { useTenant } from '../context/TenantContext'
 import { trackOrder } from '../utils/api'
 
-const STATUSES = [
-  { key: 'received',   label: 'Order Received',  icon: '📋', desc: 'Your booking has been confirmed. We are processing your delivery.' },
-  { key: 'assigned',   label: 'Rider Assigned',   icon: '🏍️', desc: 'A rider has been assigned to your delivery.' },
-  { key: 'accepted',   label: 'Accepted',         icon: '✅', desc: 'Your rider has accepted the delivery and is preparing.' },
-  { key: 'picked-up',  label: 'Picked Up',        icon: '📦', desc: 'Your package has been picked up by the rider.' },
-  { key: 'in-transit', label: 'In Transit',       icon: '🚀', desc: 'Your package is on its way to the destination.' },
-  { key: 'delivered',  label: 'Delivered',        icon: '🎉', desc: 'Your package has been delivered successfully.' },
+const STATUS_STEPS = [
+  { key: 'received',    label: 'Order Received',  icon: '📋', desc: 'Your order has been placed successfully.' },
+  { key: 'assigned',    label: 'Rider Assigned',  icon: '🏍️', desc: 'A rider has been assigned to your delivery.' },
+  { key: 'accepted',    label: 'Accepted',         icon: '✅', desc: 'Your rider has accepted the delivery.' },
+  { key: 'picked-up',   label: 'Picked Up',        icon: '📦', desc: 'Your package has been picked up.' },
+  { key: 'in-transit',  label: 'In Transit',       icon: '🚀', desc: 'Your package is on the way.' },
+  { key: 'delivered',   label: 'Delivered',        icon: '🎉', desc: 'Your package has been delivered!' },
 ]
 
-const STATUS_INDEX = {
-  received: 0, assigned: 1, accepted: 2,
-  'picked-up': 3, 'in-transit': 4, delivered: 5, cancelled: -1
-}
-
-const EST_TIMES = {
-  standard:   { received:'2-4 hours', assigned:'1-3 hours', accepted:'1-2 hours', 'picked-up':'45-90 mins', 'in-transit':'20-45 mins' },
-  'same-day': { received:'1-3 hours', assigned:'30-60 mins', accepted:'20-40 mins', 'picked-up':'20-40 mins', 'in-transit':'10-25 mins' },
-  express:    { received:'30-60 mins', assigned:'15-30 mins', accepted:'10-20 mins', 'picked-up':'10-20 mins', 'in-transit':'5-15 mins' },
-  scheduled:  { received:'Scheduled', assigned:'Scheduled', accepted:'Scheduled', 'picked-up':'On the way', 'in-transit':'Almost there' },
-}
-
 export default function TrackOrder() {
-  const { orderID } = useParams()
-  const navigate    = useNavigate()
+  const { orderID: paramID } = useParams()
+  const navigate = useNavigate()
+  const { tenant } = useTenant()
+
+  const bizName    = tenant?.businessName || 'Bdelivery'
+  const brandColor = tenant?.brandColor   || '#f97316'
+  const logo       = tenant?.logo         || null
+
+  const [orderID, setOrderID]   = useState(paramID || '')
   const [order, setOrder]       = useState(null)
-  const [loading, setLoading]   = useState(true)
+  const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState('')
-  const [searchID, setSearchID] = useState(orderID || '')
-  const [lastUpdated, setLastUpdated] = useState(null)
+  const [searched, setSearched] = useState(false)
 
   useEffect(() => {
-    if (orderID) {
-      load(orderID)
-      const interval = setInterval(() => { load(orderID, true) }, 30000)
-      return () => clearInterval(interval)
-    } else {
-      setLoading(false)
-    }
-  }, [orderID])
+    if (paramID) { setOrderID(paramID); handleSearch(paramID) }
+  }, [paramID])
 
-  const load = async (id, silent = false) => {
-    if (!silent) setLoading(true)
-    setError('')
+  const handleSearch = async (id) => {
+    const searchId = id || orderID
+    if (!searchId.trim()) { setError('Please enter your Order ID.'); return }
+    setLoading(true); setError(''); setSearched(true)
     try {
-      const data = await trackOrder(id.toUpperCase())
+      const data = await trackOrder(searchId.trim().toUpperCase())
       setOrder(data)
-      setLastUpdated(new Date())
-    } catch (err) {
-      setError('Order not found. Please check your Order ID and try again.')
-    } finally { if (!silent) setLoading(false) }
+    } catch(e) {
+      setOrder(null)
+      setError(e.response?.data?.error || 'Order not found. Please check your Order ID.')
+    } finally { setLoading(false) }
   }
 
-  const handleSearch = (e) => {
-    e.preventDefault()
-    if (searchID.trim()) navigate(`/track/${searchID.trim().toUpperCase()}`)
-  }
+  const currentStepIndex = order
+    ? STATUS_STEPS.findIndex(s => s.key === order.status)
+    : -1
 
-  const currentIndex = order ? STATUS_INDEX[order.status] : -1
-  const estTime = order && order.status !== 'delivered' && order.status !== 'cancelled'
-    ? EST_TIMES[order.deliveryType]?.[order.status]
-    : null
-
-  const deliveryTypeLabel = {
-    standard: 'Standard Delivery',
-    'same-day': 'Same-Day Delivery',
-    express: 'Express / Urgent',
-    scheduled: 'Scheduled Delivery',
-  }
-
-  const statusBadgeClass = {
-    received: 'received', assigned: 'assigned', accepted: 'accepted',
-    'picked-up': 'picked-up', 'in-transit': 'in-transit',
-    delivered: 'delivered', cancelled: 'cancelled',
-  }
-
-  const statusBadgeText = {
-    received: '📋 Order Received', assigned: '🏍️ Rider Assigned',
-    accepted: '✅ Accepted', 'picked-up': '📦 Picked Up',
-    'in-transit': '🚀 In Transit', delivered: '🎉 Delivered', cancelled: '❌ Cancelled',
-  }
+  const isCancelled = order?.status === 'cancelled'
 
   return (
     <>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Syne:wght@600;700;800&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        .tr-root { min-height: 100vh; background: #0b0f1a; font-family: 'Inter', sans-serif; color: #f0f4ff; padding: 40px 24px 80px; }
-        .tr-inner { max-width: 620px; margin: 0 auto; }
-        .tr-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 40px; }
+        :root { --brand: ${brandColor}; }
+        .tr-root { min-height: 100vh; background: #0b0f1a; font-family: 'Inter', sans-serif; color: #f0f4ff; }
+        .tr-nav { background: rgba(11,15,26,0.95); border-bottom: 1px solid rgba(255,255,255,0.06); padding: 0 24px; height: 62px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 50; backdrop-filter: blur(12px); }
         .tr-logo { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 18px; color: #fff; text-decoration: none; display: flex; align-items: center; gap: 8px; }
-        .tr-logo-icon { width: 32px; height: 32px; background: #f97316; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+        .tr-logo-icon { width: 32px; height: 32px; background: var(--brand); border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 14px; }
         .tr-back { font-size: 13px; color: rgba(240,244,255,0.4); text-decoration: none; }
-        .tr-back:hover { color: #f97316; }
-
-        .tr-search-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: 20px; padding: 28px; margin-bottom: 24px; }
-        .tr-search-title { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 20px; color: #fff; margin-bottom: 16px; }
-        .tr-search-form { display: flex; gap: 10px; }
-        .tr-search-input { flex: 1; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.09); border-radius: 10px; padding: 12px 16px; font-size: 14px; color: #fff; outline: none; transition: border-color 0.2s; letter-spacing: 0.05em; }
-        .tr-search-input:focus { border-color: #f97316; }
-        .tr-search-input::placeholder { color: rgba(240,244,255,0.2); letter-spacing: 0; }
-        .tr-search-btn { padding: 12px 24px; background: #f97316; color: #fff; border: none; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+        .tr-back:hover { color: var(--brand); }
+        .tr-body { max-width: 580px; margin: 0 auto; padding: 40px 20px 80px; }
+        .tr-header { text-align: center; margin-bottom: 36px; }
+        .tr-title { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 28px; color: #fff; margin-bottom: 8px; }
+        .tr-sub { font-size: 14px; color: rgba(240,244,255,0.4); }
+        .tr-search { display: flex; gap: 10px; margin-bottom: 32px; }
+        .tr-input { flex: 1; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.09); border-radius: 10px; padding: 13px 16px; font-size: 14px; color: #fff; outline: none; font-family: 'Inter', sans-serif; transition: border-color 0.2s; letter-spacing: 0.04em; }
+        .tr-input:focus { border-color: var(--brand); }
+        .tr-input::placeholder { color: rgba(240,244,255,0.2); letter-spacing: 0; }
+        .tr-btn { padding: 13px 24px; background: var(--brand); color: #fff; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: opacity 0.2s; }
+        .tr-btn:hover:not(:disabled) { opacity: 0.88; }
+        .tr-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+        .tr-error { background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2); border-radius: 12px; padding: 14px 18px; font-size: 14px; color: #fca5a5; text-align: center; margin-bottom: 24px; }
 
         .tr-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: 20px; padding: 28px; margin-bottom: 16px; }
+        .tr-order-head { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 20px; gap: 12px; flex-wrap: wrap; }
+        .tr-order-id { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 24px; color: var(--brand); }
+        .tr-order-date { font-size: 11px; color: rgba(240,244,255,0.35); margin-top: 4px; }
+        .tr-status-badge { padding: 6px 16px; border-radius: 100px; font-size: 12px; font-weight: 700; white-space: nowrap; }
 
-        .tr-order-head { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
-        .tr-order-id { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 28px; color: #f97316; }
-        .tr-order-label { font-size: 11px; color: rgba(240,244,255,0.35); margin-bottom: 4px; letter-spacing: 0.04em; }
-        .tr-status-badge { padding: 6px 14px; border-radius: 100px; font-size: 12px; font-weight: 600; }
-        .tr-status-badge.received   { background: rgba(99,102,241,0.15); color: #a5b4fc; border: 1px solid rgba(99,102,241,0.3); }
-        .tr-status-badge.assigned   { background: rgba(249,115,22,0.15); color: #fdba74; border: 1px solid rgba(249,115,22,0.3); }
-        .tr-status-badge.accepted   { background: rgba(168,85,247,0.15); color: #d8b4fe; border: 1px solid rgba(168,85,247,0.3); }
-        .tr-status-badge.picked-up  { background: rgba(234,179,8,0.15); color: #fde047; border: 1px solid rgba(234,179,8,0.3); }
-        .tr-status-badge.in-transit { background: rgba(59,130,246,0.15); color: #93c5fd; border: 1px solid rgba(59,130,246,0.3); }
-        .tr-status-badge.delivered  { background: rgba(34,197,94,0.15); color: #86efac; border: 1px solid rgba(34,197,94,0.3); }
-        .tr-status-badge.cancelled  { background: rgba(239,68,68,0.15); color: #fca5a5; border: 1px solid rgba(239,68,68,0.3); }
+        .tr-route { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; padding: 16px; background: rgba(255,255,255,0.02); border-radius: 12px; }
+        .tr-route-item { display: flex; align-items: flex-start; gap: 12px; }
+        .tr-route-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; margin-top: 4px; }
+        .tr-route-label { font-size: 10px; color: rgba(240,244,255,0.3); margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.04em; }
+        .tr-route-text { font-size: 14px; color: #f0f4ff; font-weight: 500; }
 
-        /* ETA BANNER */
-        .tr-eta { background: linear-gradient(135deg, rgba(249,115,22,0.12), rgba(249,115,22,0.06)); border: 1px solid rgba(249,115,22,0.25); border-radius: 14px; padding: 16px 20px; margin-bottom: 20px; display: flex; align-items: center; gap: 14px; }
-        .tr-eta-icon { font-size: 28px; flex-shrink: 0; }
-        .tr-eta-label { font-size: 11px; color: rgba(240,244,255,0.4); margin-bottom: 3px; letter-spacing: 0.04em; text-transform: uppercase; }
-        .tr-eta-time { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 22px; color: #f97316; }
-        .tr-eta-sub { font-size: 11px; color: rgba(240,244,255,0.3); margin-top: 2px; }
+        .tr-details { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+        .tr-detail-item { background: rgba(255,255,255,0.03); border-radius: 10px; padding: 12px; }
+        .tr-detail-label { font-size: 10px; color: rgba(240,244,255,0.3); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.04em; }
+        .tr-detail-value { font-size: 13px; color: #f0f4ff; font-weight: 500; }
 
-        /* TIMELINE */
-        .tr-timeline { display: flex; flex-direction: column; gap: 0; margin: 4px 0; }
-        .tr-tl-item { display: flex; gap: 16px; position: relative; }
-        .tr-tl-item:not(:last-child)::before { content: ''; position: absolute; left: 15px; top: 36px; width: 2px; height: calc(100% - 8px); background: rgba(255,255,255,0.06); }
-        .tr-tl-item.done::before { background: rgba(249,115,22,0.3); }
-        .tr-tl-left { display: flex; flex-direction: column; align-items: center; flex-shrink: 0; }
-        .tr-tl-circle { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; z-index: 1; }
-        .tr-tl-circle.done { background: rgba(249,115,22,0.2); border: 2px solid #f97316; }
-        .tr-tl-circle.current { background: #f97316; border: 2px solid #f97316; animation: tlPulse 2s infinite; }
-        .tr-tl-circle.pending { background: rgba(255,255,255,0.05); border: 2px solid rgba(255,255,255,0.1); }
-        @keyframes tlPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(249,115,22,0.4); } 50% { box-shadow: 0 0 0 8px rgba(249,115,22,0); } }
-        .tr-tl-right { padding: 4px 0 24px; }
-        .tr-tl-label { font-size: 14px; font-weight: 600; color: #fff; margin-bottom: 3px; }
-        .tr-tl-label.pending { color: rgba(240,244,255,0.3); font-weight: 400; }
-        .tr-tl-desc { font-size: 12px; color: rgba(240,244,255,0.35); }
+        .tr-timeline { display: flex; flex-direction: column; gap: 0; }
+        .tr-step { display: flex; gap: 16px; position: relative; }
+        .tr-step-left { display: flex; flex-direction: column; align-items: center; flex-shrink: 0; }
+        .tr-step-dot { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; z-index: 1; transition: all 0.3s; }
+        .tr-step-dot.done { background: var(--brand); border: 2px solid var(--brand); }
+        .tr-step-dot.current { background: rgba(249,115,22,0.2); border: 2px solid var(--brand); animation: trPulse 2s infinite; }
+        .tr-step-dot.pending { background: rgba(255,255,255,0.04); border: 2px solid rgba(255,255,255,0.1); }
+        .tr-step-dot.cancelled { background: rgba(239,68,68,0.15); border: 2px solid rgba(239,68,68,0.3); }
+        @keyframes trPulse { 0%,100%{box-shadow:0 0 0 0 rgba(249,115,22,0.4);} 50%{box-shadow:0 0 0 8px rgba(249,115,22,0);} }
+        .tr-step-line { width: 2px; flex: 1; min-height: 24px; margin: 4px 0; transition: background 0.3s; }
+        .tr-step-line.done { background: var(--brand); }
+        .tr-step-line.pending { background: rgba(255,255,255,0.07); }
+        .tr-step-content { padding: 6px 0 24px; flex: 1; }
+        .tr-step-label { font-size: 14px; font-weight: 600; color: #fff; margin-bottom: 3px; }
+        .tr-step-label.pending { color: rgba(240,244,255,0.3); font-weight: 400; }
+        .tr-step-desc { font-size: 12px; color: rgba(240,244,255,0.4); }
 
-        /* LIVE INDICATOR */
-        .tr-live { display: flex; align-items: center; gap: 6px; font-size: 11px; color: rgba(240,244,255,0.3); margin-bottom: 16px; }
-        .tr-live-dot { width: 6px; height: 6px; background: #22c55e; border-radius: 50%; animation: livePulse 2s infinite; flex-shrink: 0; }
-        @keyframes livePulse { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
+        .tr-rider { background: rgba(34,197,94,0.06); border: 1px solid rgba(34,197,94,0.2); border-radius: 14px; padding: 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 4px; }
+        .tr-rider-name { font-weight: 600; color: #fff; margin-bottom: 3px; }
+        .tr-rider-label { font-size: 10px; color: rgba(240,244,255,0.3); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
+        .tr-rider-phone { font-size: 12px; color: #86efac; }
+        .tr-call-btn { padding: 8px 16px; background: rgba(34,197,94,0.15); border: 1px solid rgba(34,197,94,0.3); border-radius: 8px; color: #86efac; font-size: 12px; font-weight: 600; text-decoration: none; white-space: nowrap; transition: all 0.2s; }
+        .tr-call-btn:hover { background: #22c55e; color: #fff; }
 
-        /* INFO ROWS */
-        .tr-info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-        .tr-info-item { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 14px; }
-        .tr-info-label { font-size: 10px; color: rgba(240,244,255,0.3); margin-bottom: 5px; letter-spacing: 0.06em; text-transform: uppercase; }
-        .tr-info-value { font-size: 13px; font-weight: 500; color: #f0f4ff; }
+        .tr-cancelled { background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2); border-radius: 14px; padding: 20px; text-align: center; }
+        .tr-cancelled-icon { font-size: 32px; margin-bottom: 8px; }
+        .tr-cancelled-text { font-size: 15px; font-weight: 600; color: #fca5a5; }
+        .tr-cancelled-sub { font-size: 12px; color: rgba(240,244,255,0.35); margin-top: 4px; }
 
-        .tr-rider-card { background: rgba(249,115,22,0.06); border: 1px solid rgba(249,115,22,0.2); border-radius: 14px; padding: 18px; display: flex; align-items: center; gap: 14px; }
-        .tr-rider-avatar { width: 44px; height: 44px; background: rgba(249,115,22,0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
-        .tr-rider-name { font-size: 15px; font-weight: 600; color: #fff; margin-bottom: 3px; }
-        .tr-rider-phone { font-size: 13px; color: rgba(240,244,255,0.4); }
+        .tr-delivered { background: rgba(34,197,94,0.08); border: 1px solid rgba(34,197,94,0.2); border-radius: 14px; padding: 20px; text-align: center; margin-bottom: 16px; }
+        .tr-delivered-icon { font-size: 40px; margin-bottom: 8px; }
+        .tr-delivered-text { font-size: 16px; font-weight: 700; color: #86efac; }
+        .tr-delivered-sub { font-size: 12px; color: rgba(240,244,255,0.35); margin-top: 4px; }
 
-        .tr-delivered-banner { background: linear-gradient(135deg, rgba(34,197,94,0.12), rgba(34,197,94,0.06)); border: 1px solid rgba(34,197,94,0.25); border-radius: 16px; padding: 24px; text-align: center; margin-bottom: 16px; }
-        .tr-delivered-icon { font-size: 48px; margin-bottom: 10px; }
-        .tr-delivered-title { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 20px; color: #86efac; margin-bottom: 6px; }
-        .tr-delivered-sub { font-size: 13px; color: rgba(240,244,255,0.4); }
-
-        .tr-proof-card { background: rgba(34,197,94,0.05); border: 1px solid rgba(34,197,94,0.15); border-radius: 14px; padding: 18px; }
-        .tr-proof-title { font-size: 12px; font-weight: 600; color: #86efac; margin-bottom: 10px; letter-spacing: 0.04em; text-transform: uppercase; }
-        .tr-proof-img { width: 100%; max-height: 220px; object-fit: cover; border-radius: 10px; }
-
-        .tr-cancelled { background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2); border-radius: 14px; padding: 24px; text-align: center; }
-        .tr-cancelled-icon { font-size: 36px; margin-bottom: 10px; }
-        .tr-cancelled-text { font-size: 14px; color: #fca5a5; line-height: 1.6; }
-
-        .tr-error { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.2); border-radius: 12px; padding: 24px; text-align: center; color: #fca5a5; font-size: 14px; }
-        .tr-loading { text-align: center; padding: 60px 0; color: rgba(240,244,255,0.3); font-size: 14px; }
-
-        .tr-book-link { display: block; text-align: center; margin-top: 24px; padding: 14px; background: rgba(249,115,22,0.1); border: 1px solid rgba(249,115,22,0.25); border-radius: 12px; color: #f97316; text-decoration: none; font-size: 13px; font-weight: 600; transition: all 0.2s; }
-        .tr-book-link:hover { background: rgba(249,115,22,0.2); }
-
-        @media (max-width: 480px) {
-          .tr-info-grid { grid-template-columns: 1fr; }
-          .tr-search-form { flex-direction: column; }
-          .tr-root { padding: 24px 16px 60px; }
-          .tr-card { padding: 20px; }
+        @media (max-width: 520px) {
+          .tr-body { padding: 24px 16px 60px; }
+          .tr-search { flex-direction: column; }
+          .tr-details { grid-template-columns: 1fr; }
         }
       `}</style>
 
       <div className="tr-root">
-        <div className="tr-inner">
-          <div className="tr-nav">
-            <a href="/" className="tr-logo">
-              <div className="tr-logo-icon">🚀</div>
-              SwiftByGwyn
-            </a>
-            <a href="/" className="tr-back">← Home</a>
+        <nav className="tr-nav">
+          <a href="/" className="tr-logo">
+            {logo
+              ? <img src={logo} alt="logo" style={{ width:32, height:32, borderRadius:7, objectFit:'cover' }} />
+              : <div className="tr-logo-icon">🚀</div>
+            }
+            {bizName}
+          </a>
+          <a href="/" className="tr-back">← Back to Home</a>
+        </nav>
+
+        <div className="tr-body">
+          <div className="tr-header">
+            <div className="tr-title">Track Your Order</div>
+            <div className="tr-sub">Enter your Order ID to get real-time delivery updates</div>
           </div>
 
-          {/* Search */}
-          <div className="tr-search-card">
-            <div className="tr-search-title">Track Your Order</div>
-            <form className="tr-search-form" onSubmit={handleSearch}>
-              <input className="tr-search-input" placeholder="Enter Order ID e.g. SWG001" value={searchID} onChange={e => setSearchID(e.target.value)} />
-              <button className="tr-search-btn" type="submit">Track</button>
-            </form>
+          <div className="tr-search">
+            <input
+              className="tr-input"
+              placeholder="e.g. SWG-X7K2M9"
+              value={orderID}
+              onChange={e => setOrderID(e.target.value.toUpperCase())}
+              onKeyDown={e => e.key === 'Enter' && handleSearch()}
+            />
+            <button className="tr-btn" onClick={() => handleSearch()} disabled={loading}>
+              {loading ? '⏳' : '🔍 Track'}
+            </button>
           </div>
 
-          {loading && <div className="tr-loading">🔍 Looking up your order...</div>}
-          {error && !loading && <div className="tr-error">❌ {error}</div>}
+          {error && <div className="tr-error">✕ {error}</div>}
 
-          {order && !loading && (
+          {order && (
             <>
-              {/* Delivered Banner */}
-              {order.status === 'delivered' && (
-                <div className="tr-delivered-banner">
-                  <div className="tr-delivered-icon">🎉</div>
-                  <div className="tr-delivered-title">Package Delivered!</div>
-                  <div className="tr-delivered-sub">Your delivery was completed successfully. Thank you for using SwiftByGwyn.</div>
-                </div>
-              )}
-
-              {/* ETA Banner */}
-              {estTime && order.status !== 'cancelled' && (
-                <div className="tr-eta">
-                  <div className="tr-eta-icon">⏱️</div>
-                  <div>
-                    <div className="tr-eta-label">Estimated Delivery Time</div>
-                    <div className="tr-eta-time">{estTime}</div>
-                    <div className="tr-eta-sub">
-                      {order.deliveryType === 'scheduled'
-                        ? `Scheduled for ${order.scheduledDate} at ${order.scheduledTime}`
-                        : 'Estimate based on current status and delivery type'}
-                    </div>
-                  </div>
-                </div>
-              )}
-
               {/* Order Header */}
               <div className="tr-card">
                 <div className="tr-order-head">
                   <div>
-                    <div className="tr-order-label">Order ID</div>
                     <div className="tr-order-id">{order.orderID}</div>
+                    <div className="tr-order-date">Placed {new Date(order.createdAt).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})} at {new Date(order.createdAt).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}</div>
                   </div>
-                  <div className={`tr-status-badge ${statusBadgeClass[order.status] || 'received'}`}>
-                    {statusBadgeText[order.status]}
+                  {isCancelled
+                    ? <span className="tr-status-badge" style={{ background:'rgba(239,68,68,0.15)', color:'#fca5a5' }}>❌ Cancelled</span>
+                    : order.status === 'delivered'
+                    ? <span className="tr-status-badge" style={{ background:'rgba(34,197,94,0.15)', color:'#86efac' }}>✅ Delivered</span>
+                    : <span className="tr-status-badge" style={{ background:'rgba(249,115,22,0.15)', color: brandColor }}>🔄 In Progress</span>
+                  }
+                </div>
+
+                <div className="tr-route">
+                  <div className="tr-route-item">
+                    <div className="tr-route-dot" style={{ background: brandColor }} />
+                    <div><div className="tr-route-label">Pickup</div><div className="tr-route-text">{order.pickupLocation}</div></div>
+                  </div>
+                  <div className="tr-route-item">
+                    <div className="tr-route-dot" style={{ background:'#22c55e' }} />
+                    <div><div className="tr-route-label">Drop-off</div><div className="tr-route-text">{order.dropoffLocation}</div></div>
                   </div>
                 </div>
 
-                {/* Live indicator */}
-                {order.status !== 'delivered' && order.status !== 'cancelled' && (
-                  <div className="tr-live">
-                    <div className="tr-live-dot" />
-                    Live tracking · Auto-updates every 30 seconds
-                    {lastUpdated && <span style={{ marginLeft:4 }}>· Last updated {lastUpdated.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}</span>}
+                <div className="tr-details">
+                  <div className="tr-detail-item"><div className="tr-detail-label">Recipient</div><div className="tr-detail-value">{order.recipientName}</div></div>
+                  <div className="tr-detail-item"><div className="tr-detail-label">Delivery Type</div><div className="tr-detail-value" style={{ textTransform:'capitalize' }}>{order.deliveryType?.replace('-',' ')}</div></div>
+                  <div className="tr-detail-item"><div className="tr-detail-label">Delivery Fee</div><div className="tr-detail-value" style={{ color: brandColor }}>GHS {order.deliveryFee}</div></div>
+                  <div className="tr-detail-item"><div className="tr-detail-label">Payment</div><div className="tr-detail-value" style={{ textTransform:'capitalize' }}>{order.paymentMethod?.replace('-',' ')}</div></div>
+                  {order.distance > 0 && <div className="tr-detail-item"><div className="tr-detail-label">Distance</div><div className="tr-detail-value">{order.distance} km</div></div>}
+                  {order.deliveryType === 'scheduled' && order.scheduledDate && (
+                    <div className="tr-detail-item" style={{ gridColumn:'1/-1' }}>
+                      <div className="tr-detail-label">Scheduled For</div>
+                      <div className="tr-detail-value" style={{ color: brandColor }}>{order.scheduledDate} at {order.scheduledTime}</div>
+                    </div>
+                  )}
+                </div>
+
+                {order.assignedRider && (
+                  <div className="tr-rider">
+                    <div>
+                      <div className="tr-rider-label">Your Rider</div>
+                      <div className="tr-rider-name">{order.assignedRider.name}</div>
+                      <div className="tr-rider-phone">{order.assignedRider.phone}</div>
+                    </div>
+                    <a href={`tel:${order.assignedRider.phone}`} className="tr-call-btn">📞 Call Rider</a>
                   </div>
                 )}
+              </div>
 
-                {/* Timeline */}
-                {order.status !== 'cancelled' ? (
+              {/* Delivered */}
+              {order.status === 'delivered' && (
+                <div className="tr-delivered">
+                  <div className="tr-delivered-icon">🎉</div>
+                  <div className="tr-delivered-text">Package Delivered!</div>
+                  {order.proofRecipientName && <div className="tr-delivered-sub">Received by: {order.proofRecipientName}</div>}
+                </div>
+              )}
+
+              {/* Cancelled */}
+              {isCancelled && (
+                <div className="tr-cancelled">
+                  <div className="tr-cancelled-icon">❌</div>
+                  <div className="tr-cancelled-text">Order Cancelled</div>
+                  <div className="tr-cancelled-sub">Please contact {bizName} for assistance.</div>
+                </div>
+              )}
+
+              {/* Timeline */}
+              {!isCancelled && (
+                <div className="tr-card">
+                  <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:15, color:'#fff', marginBottom:20 }}>Delivery Timeline</div>
                   <div className="tr-timeline">
-                    {STATUSES.map((s, i) => {
-                      const isDone    = currentIndex > i
-                      const isCurrent = currentIndex === i
+                    {STATUS_STEPS.map((step, i) => {
+                      const isDone    = currentStepIndex > i
+                      const isCurrent = currentStepIndex === i
+                      const isPending = currentStepIndex < i
+                      const isLast    = i === STATUS_STEPS.length - 1
+
                       return (
-                        <div key={s.key} className={`tr-tl-item${isDone ? ' done' : ''}`}>
-                          <div className="tr-tl-left">
-                            <div className={`tr-tl-circle ${isDone ? 'done' : isCurrent ? 'current' : 'pending'}`}>
-                              {isDone ? '✓' : s.icon}
+                        <div key={step.key} className="tr-step">
+                          <div className="tr-step-left">
+                            <div className={`tr-step-dot ${isDone ? 'done' : isCurrent ? 'current' : 'pending'}`}>
+                              {isDone ? '✓' : step.icon}
                             </div>
+                            {!isLast && <div className={`tr-step-line ${isDone ? 'done' : 'pending'}`} />}
                           </div>
-                          <div className="tr-tl-right">
-                            <div className={`tr-tl-label${!isDone && !isCurrent ? ' pending' : ''}`}>{s.label}</div>
-                            {(isDone || isCurrent) && <div className="tr-tl-desc">{s.desc}</div>}
+                          <div className="tr-step-content">
+                            <div className={`tr-step-label${isPending ? ' pending' : ''}`}>{step.label}</div>
+                            {(isDone || isCurrent) && <div className="tr-step-desc">{step.desc}</div>}
                           </div>
                         </div>
                       )
                     })}
                   </div>
-                ) : (
-                  <div className="tr-cancelled">
-                    <div className="tr-cancelled-icon">❌</div>
-                    <div className="tr-cancelled-text">This order has been cancelled.<br />Please contact us on WhatsApp for assistance.</div>
-                  </div>
-                )}
-              </div>
-
-              {/* Delivery Info */}
-              <div className="tr-card">
-                <div style={{ fontSize:12, fontWeight:600, color:'rgba(240,244,255,0.3)', marginBottom:14, letterSpacing:'0.06em', textTransform:'uppercase' }}>Delivery Details</div>
-                <div className="tr-info-grid">
-                  <div className="tr-info-item">
-                    <div className="tr-info-label">📍 Pickup</div>
-                    <div className="tr-info-value">{order.pickupLocation}</div>
-                  </div>
-                  <div className="tr-info-item">
-                    <div className="tr-info-label">🎯 Drop-off</div>
-                    <div className="tr-info-value">{order.dropoffLocation}</div>
-                  </div>
-                  <div className="tr-info-item">
-                    <div className="tr-info-label">🚚 Delivery Type</div>
-                    <div className="tr-info-value">{deliveryTypeLabel[order.deliveryType] || order.deliveryType}</div>
-                  </div>
-                  <div className="tr-info-item">
-                    <div className="tr-info-label">💰 Delivery Fee</div>
-                    <div className="tr-info-value" style={{ color:'#f97316' }}>GHS {order.deliveryFee}</div>
-                  </div>
-                  <div className="tr-info-item">
-                    <div className="tr-info-label">💳 Payment</div>
-                    <div className="tr-info-value" style={{ textTransform:'capitalize' }}>{order.paymentMethod?.replace('-',' ')}</div>
-                  </div>
-                  <div className="tr-info-item">
-                    <div className="tr-info-label">📅 Booked</div>
-                    <div className="tr-info-value">{new Date(order.createdAt).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}</div>
-                  </div>
-                  {order.deliveryType === 'scheduled' && (
-                    <div className="tr-info-item" style={{ gridColumn:'1/-1' }}>
-                      <div className="tr-info-label">🗓️ Scheduled For</div>
-                      <div className="tr-info-value">{order.scheduledDate} at {order.scheduledTime}</div>
-                    </div>
-                  )}
-                  {order.packageDescription && (
-                    <div className="tr-info-item" style={{ gridColumn:'1/-1' }}>
-                      <div className="tr-info-label">📦 Package</div>
-                      <div className="tr-info-value">{order.packageDescription}</div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Assigned Rider */}
-              {order.assignedRider && (
-                <div className="tr-card">
-                  <div style={{ fontSize:12, fontWeight:600, color:'rgba(240,244,255,0.3)', marginBottom:14, letterSpacing:'0.06em', textTransform:'uppercase' }}>Your Rider</div>
-                  <div className="tr-rider-card">
-                    <div className="tr-rider-avatar">🏍️</div>
-                    <div style={{ flex:1 }}>
-                      <div className="tr-rider-name">{order.assignedRider.name}</div>
-                      <div className="tr-rider-phone">{order.assignedRider.phone}</div>
-                    </div>
-                    <a href={`tel:${order.assignedRider.phone}`} style={{ padding:'8px 16px', background:'rgba(249,115,22,0.15)', border:'1px solid rgba(249,115,22,0.3)', borderRadius:8, color:'#f97316', fontSize:12, fontWeight:600, textDecoration:'none' }}>
-                      📞 Call
-                    </a>
-                  </div>
                 </div>
               )}
 
-              {/* Proof of Delivery */}
-              {order.status === 'delivered' && (order.proofPhoto || order.proofRecipientName) && (
-                <div className="tr-card">
-                  <div className="tr-proof-card">
-                    <div className="tr-proof-title">✅ Proof of Delivery</div>
-                    {order.proofRecipientName && (
-                      <div style={{ fontSize:14, color:'rgba(240,244,255,0.6)', marginBottom: order.proofPhoto ? 12 : 0 }}>
-                        Received by: <strong style={{ color:'#fff' }}>{order.proofRecipientName}</strong>
-                      </div>
-                    )}
-                    {order.proofPhoto && <img src={order.proofPhoto} alt="Proof of delivery" className="tr-proof-img" />}
-                  </div>
-                </div>
-              )}
-
-              <a href="/book" className="tr-book-link">📦 Book Another Delivery</a>
+              <div style={{ textAlign:'center', marginTop:16 }}>
+                <a href="/book" style={{ color: brandColor, fontSize:13, textDecoration:'none', fontWeight:500 }}>+ Book Another Delivery</a>
+              </div>
             </>
+          )}
+
+          {!order && searched && !loading && !error && (
+            <div style={{ textAlign:'center', padding:'40px 0', color:'rgba(240,244,255,0.25)', fontSize:14 }}>
+              No order found. Please check your Order ID.
+            </div>
           )}
         </div>
       </div>

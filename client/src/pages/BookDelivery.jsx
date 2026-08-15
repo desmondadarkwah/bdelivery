@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { createOrder, fetchSettings } from '../utils/api'
+import { createOrder } from '../utils/api'
 import { useCustomerAuth } from '../context/CustomerAuthContext'
+import { useTenant } from '../context/TenantContext'
 import LocationPicker from '../components/LocationPicker'
 
 const DELIVERY_TYPES = [
@@ -16,12 +17,17 @@ const RATE_PER_KM = 2
 export default function BookDelivery() {
   const navigate = useNavigate()
   const { customer } = useCustomerAuth()
+  const { tenant } = useTenant()
+
+  const bizName    = tenant?.businessName  || 'Bdelivery'
+  const brandColor = tenant?.brandColor    || '#f97316'
+  const logo       = tenant?.logo          || null
+
   const [step, setStep]           = useState(1)
   const [loading, setLoading]     = useState(false)
   const [error, setError]         = useState('')
   const [success, setSuccess]     = useState(null)
   const [packageImage, setPackageImage] = useState(null)
-  const [settings, setSettings]   = useState(null)
   const [pickupCoords, setPickupCoords]   = useState(null)
   const [dropoffCoords, setDropoffCoords] = useState(null)
   const [distance, setDistance]   = useState(0)
@@ -37,24 +43,20 @@ export default function BookDelivery() {
   })
 
   useEffect(() => {
-    fetchSettings().then(setSettings).catch(console.error)
-  }, [])
-
-  useEffect(() => {
     if (customer) {
       setForm(prev => ({
         ...prev,
-        customerName: customer.name || prev.customerName,
+        customerName:  customer.name  || prev.customerName,
         customerPhone: customer.phone || prev.customerPhone,
       }))
     }
   }, [customer])
 
   const BASE_FEES = {
-    standard:   settings?.standardFee  || 30,
-    'same-day': settings?.sameDayFee   || 50,
-    express:    settings?.expressFee   || 80,
-    scheduled:  settings?.scheduledFee || 40,
+    standard:   tenant?.standardFee  || 30,
+    'same-day': tenant?.sameDayFee   || 50,
+    express:    tenant?.expressFee   || 80,
+    scheduled:  tenant?.scheduledFee || 40,
   }
 
   const set = (field, value) => setForm(prev => ({ ...prev, [field]: value }))
@@ -96,7 +98,7 @@ export default function BookDelivery() {
       Object.entries(form).forEach(([k, v]) => fd.append(k, v))
       fd.append('deliveryFee', deliveryFee)
       fd.append('distance', distance)
-      if (customer) fd.append('customerId', customer._id)
+      if (customer) fd.append('customerId', customer._id || customer.id)
       if (pickupCoords) {
         fd.append('pickupCoords[lat]', pickupCoords.lat)
         fd.append('pickupCoords[lng]', pickupCoords.lng)
@@ -120,6 +122,7 @@ export default function BookDelivery() {
           @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Syne:wght@600;700;800&display=swap');
           * { box-sizing: border-box; margin: 0; padding: 0; }
           body { background: #0b0f1a; }
+          :root { --brand: ${brandColor}; }
           .suc-root { min-height: 100vh; background: #0b0f1a; display: flex; align-items: center; justify-content: center; padding: 40px 20px; font-family: 'Inter', sans-serif; }
           .suc-card { width: 100%; max-width: 460px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 24px; padding: 44px 32px; text-align: center; }
           .suc-check { width: 72px; height: 72px; background: rgba(34,197,94,0.15); border: 2px solid rgba(34,197,94,0.3); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 32px; margin: 0 auto 20px; }
@@ -127,14 +130,14 @@ export default function BookDelivery() {
           .suc-sub { font-size: 14px; color: rgba(240,244,255,0.45); line-height: 1.7; margin-bottom: 28px; }
           .suc-id-box { background: rgba(249,115,22,0.08); border: 1px solid rgba(249,115,22,0.25); border-radius: 16px; padding: 22px; margin-bottom: 16px; }
           .suc-id-label { font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(240,244,255,0.3); margin-bottom: 10px; }
-          .suc-id { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 32px; color: #f97316; letter-spacing: 0.06em; }
+          .suc-id { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 32px; color: var(--brand); letter-spacing: 0.06em; }
           .suc-id-tip { font-size: 12px; color: rgba(240,244,255,0.3); margin-top: 8px; }
           .suc-details { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 16px; margin-bottom: 20px; text-align: left; display: flex; flex-direction: column; gap: 10px; }
           .suc-detail-row { display: flex; justify-content: space-between; font-size: 13px; gap: 12px; }
           .suc-detail-label { color: rgba(240,244,255,0.35); flex-shrink: 0; }
           .suc-detail-value { color: #f0f4ff; font-weight: 500; text-align: right; }
           .suc-actions { display: flex; flex-direction: column; gap: 10px; }
-          .suc-btn { display: block; padding: 14px; background: #f97316; color: #fff; border: none; border-radius: 12px; font-size: 14px; font-weight: 600; cursor: pointer; text-decoration: none; text-align: center; transition: opacity 0.2s; }
+          .suc-btn { display: block; padding: 14px; background: var(--brand); color: #fff; border: none; border-radius: 12px; font-size: 14px; font-weight: 600; cursor: pointer; text-decoration: none; text-align: center; transition: opacity 0.2s; }
           .suc-btn:hover { opacity: 0.88; }
           .suc-btn-ghost { display: block; padding: 14px; background: transparent; color: rgba(240,244,255,0.4); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; font-size: 14px; cursor: pointer; text-decoration: none; text-align: center; }
         `}</style>
@@ -154,7 +157,7 @@ export default function BookDelivery() {
               <div className="suc-detail-row"><span className="suc-detail-label">Recipient</span><span className="suc-detail-value">{form.recipientName} · {form.recipientPhone}</span></div>
               <div className="suc-detail-row"><span className="suc-detail-label">Type</span><span className="suc-detail-value">{selectedType?.label}</span></div>
               {distance > 0 && <div className="suc-detail-row"><span className="suc-detail-label">Distance</span><span className="suc-detail-value">{distance} km</span></div>}
-              <div className="suc-detail-row"><span className="suc-detail-label">Fee</span><span className="suc-detail-value" style={{ color:'#f97316' }}>GHS {deliveryFee}</span></div>
+              <div className="suc-detail-row"><span className="suc-detail-label">Fee</span><span className="suc-detail-value" style={{ color: brandColor }}>GHS {deliveryFee}</span></div>
               <div className="suc-detail-row"><span className="suc-detail-label">Payment</span><span className="suc-detail-value" style={{ textTransform:'capitalize' }}>{form.paymentMethod.replace('-',' ')}</span></div>
               {form.deliveryType === 'scheduled' && (
                 <div className="suc-detail-row"><span className="suc-detail-label">Scheduled</span><span className="suc-detail-value">{form.scheduledDate} at {form.scheduledTime}</span></div>
@@ -177,19 +180,20 @@ export default function BookDelivery() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Syne:wght@600;700;800&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
+        :root { --brand: ${brandColor}; }
         .bk-root { min-height: 100vh; background: #0b0f1a; font-family: 'Inter', sans-serif; color: #f0f4ff; }
         .bk-nav { background: rgba(255,255,255,0.02); border-bottom: 1px solid rgba(255,255,255,0.06); padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 50; backdrop-filter: blur(12px); }
         .bk-logo { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 18px; color: #fff; text-decoration: none; display: flex; align-items: center; gap: 8px; }
-        .bk-logo-icon { width: 32px; height: 32px; background: #f97316; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+        .bk-logo-icon { width: 32px; height: 32px; background: var(--brand); border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 14px; }
         .bk-nav-right { display: flex; align-items: center; gap: 10px; }
         .bk-back { font-size: 13px; color: rgba(240,244,255,0.4); text-decoration: none; }
-        .bk-back:hover { color: #f97316; }
-        .bk-user-badge { display: flex; align-items: center; gap: 6px; background: rgba(249,115,22,0.1); border: 1px solid rgba(249,115,22,0.2); border-radius: 100px; padding: 4px 12px; font-size: 12px; color: #f97316; font-weight: 500; }
+        .bk-back:hover { color: var(--brand); }
+        .bk-user-badge { display: flex; align-items: center; gap: 6px; background: rgba(249,115,22,0.1); border: 1px solid rgba(249,115,22,0.2); border-radius: 100px; padding: 4px 12px; font-size: 12px; color: var(--brand); font-weight: 500; }
         .bk-body { max-width: 580px; margin: 0 auto; padding: 32px 20px 80px; }
         .bk-steps { display: flex; align-items: center; margin-bottom: 32px; }
         .bk-step { display: flex; align-items: center; gap: 8px; }
         .bk-step-circle { width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0; transition: all 0.3s; }
-        .bk-step-circle.active { background: #f97316; color: #fff; box-shadow: 0 0 0 4px rgba(249,115,22,0.2); }
+        .bk-step-circle.active { background: var(--brand); color: #fff; box-shadow: 0 0 0 4px rgba(249,115,22,0.2); }
         .bk-step-circle.done { background: rgba(34,197,94,0.2); color: #86efac; border: 1px solid rgba(34,197,94,0.4); }
         .bk-step-circle.inactive { background: rgba(255,255,255,0.06); color: rgba(240,244,255,0.25); }
         .bk-step-label { font-size: 12px; font-weight: 500; color: rgba(240,244,255,0.35); white-space: nowrap; }
@@ -203,9 +207,9 @@ export default function BookDelivery() {
         .bk-subsection { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(240,244,255,0.3); margin-bottom: 14px; }
         .bk-field { margin-bottom: 16px; }
         .bk-label { display: block; font-size: 12px; font-weight: 500; color: rgba(240,244,255,0.45); margin-bottom: 7px; }
-        .bk-label span { color: #f97316; }
+        .bk-label span { color: var(--brand); }
         .bk-input { width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.09); border-radius: 10px; padding: 12px 14px; font-size: 14px; color: #fff; outline: none; transition: border-color 0.2s; font-family: 'Inter', sans-serif; }
-        .bk-input:focus { border-color: #f97316; background: rgba(255,255,255,0.07); }
+        .bk-input:focus { border-color: var(--brand); background: rgba(255,255,255,0.07); }
         .bk-input::placeholder { color: rgba(240,244,255,0.18); }
         .bk-input:disabled { opacity: 0.6; cursor: not-allowed; }
         .bk-textarea { resize: vertical; min-height: 85px; }
@@ -213,12 +217,12 @@ export default function BookDelivery() {
         .bk-type-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
         .bk-type-card { background: rgba(255,255,255,0.03); border: 1.5px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 16px; cursor: pointer; transition: all 0.2s; position: relative; overflow: hidden; }
         .bk-type-card:hover { border-color: rgba(249,115,22,0.3); }
-        .bk-type-card.selected { border-color: #f97316; background: rgba(249,115,22,0.08); }
-        .bk-type-card.selected::before { content: '✓'; position: absolute; top: 10px; right: 12px; font-size: 12px; color: #f97316; font-weight: 700; }
+        .bk-type-card.selected { border-color: var(--brand); background: rgba(249,115,22,0.08); }
+        .bk-type-card.selected::before { content: '✓'; position: absolute; top: 10px; right: 12px; font-size: 12px; color: var(--brand); font-weight: 700; }
         .bk-type-icon { font-size: 24px; margin-bottom: 8px; }
         .bk-type-name { font-size: 13px; font-weight: 600; color: #fff; margin-bottom: 2px; }
         .bk-type-desc { font-size: 11px; color: rgba(240,244,255,0.35); margin-bottom: 6px; }
-        .bk-type-fee { font-size: 14px; font-weight: 700; color: #f97316; }
+        .bk-type-fee { font-size: 14px; font-weight: 700; color: var(--brand); }
         .bk-type-eta { font-size: 10px; color: rgba(240,244,255,0.3); margin-top: 2px; }
         .bk-type-note { font-size: 10px; color: rgba(249,115,22,0.5); margin-top: 2px; }
         .bk-file-zone { width: 100%; background: rgba(255,255,255,0.03); border: 1.5px dashed rgba(255,255,255,0.12); border-radius: 12px; padding: 20px; text-align: center; cursor: pointer; color: rgba(240,244,255,0.3); font-size: 13px; transition: all 0.2s; }
@@ -227,13 +231,13 @@ export default function BookDelivery() {
         .bk-payment-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
         .bk-payment-card { background: rgba(255,255,255,0.03); border: 1.5px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 18px 14px; cursor: pointer; transition: all 0.2s; text-align: center; position: relative; }
         .bk-payment-card:hover { border-color: rgba(249,115,22,0.3); }
-        .bk-payment-card.selected { border-color: #f97316; background: rgba(249,115,22,0.08); }
-        .bk-payment-card.selected::before { content: '✓'; position: absolute; top: 10px; right: 12px; font-size: 12px; color: #f97316; font-weight: 700; }
+        .bk-payment-card.selected { border-color: var(--brand); background: rgba(249,115,22,0.08); }
+        .bk-payment-card.selected::before { content: '✓'; position: absolute; top: 10px; right: 12px; font-size: 12px; color: var(--brand); font-weight: 700; }
         .bk-payment-icon { font-size: 28px; margin-bottom: 8px; }
         .bk-payment-label { font-size: 13px; font-weight: 600; color: #fff; margin-bottom: 3px; }
         .bk-payment-sub { font-size: 11px; color: rgba(240,244,255,0.3); }
         .bk-fee-box { background: linear-gradient(135deg, rgba(249,115,22,0.1), rgba(249,115,22,0.05)); border: 1px solid rgba(249,115,22,0.25); border-radius: 14px; padding: 18px 20px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
-        .bk-fee-amount { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 26px; color: #f97316; }
+        .bk-fee-amount { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 26px; color: var(--brand); }
         .bk-fee-label { font-size: 12px; color: rgba(240,244,255,0.4); margin-bottom: 3px; }
         .bk-fee-type { font-size: 12px; color: rgba(240,244,255,0.4); margin-bottom: 3px; text-align: right; }
         .bk-fee-eta { font-size: 12px; color: rgba(249,115,22,0.7); font-weight: 500; text-align: right; }
@@ -244,7 +248,7 @@ export default function BookDelivery() {
         .bk-summary-value { font-size: 13px; color: #f0f4ff; font-weight: 500; }
         .bk-error { background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2); border-radius: 10px; padding: 12px 16px; font-size: 13px; color: #fca5a5; margin-bottom: 14px; }
         .bk-actions { display: flex; gap: 10px; }
-        .bk-btn-primary { flex: 1; padding: 15px; background: #f97316; color: #fff; border: none; border-radius: 12px; font-size: 14px; font-weight: 700; cursor: pointer; transition: all 0.2s; }
+        .bk-btn-primary { flex: 1; padding: 15px; background: var(--brand); color: #fff; border: none; border-radius: 12px; font-size: 14px; font-weight: 700; cursor: pointer; transition: all 0.2s; }
         .bk-btn-primary:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
         .bk-btn-primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
         .bk-btn-ghost { padding: 15px 22px; background: transparent; color: rgba(240,244,255,0.4); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; font-size: 14px; cursor: pointer; }
@@ -253,7 +257,7 @@ export default function BookDelivery() {
         .bk-trust-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: rgba(240,244,255,0.3); }
         .bk-login-banner { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: rgba(249,115,22,0.06); border: 1px solid rgba(249,115,22,0.2); border-radius: 12px; margin-bottom: 20px; }
         .bk-login-banner-text { font-size: 13px; color: rgba(240,244,255,0.5); flex: 1; }
-        .bk-login-banner-link { font-size: 13px; font-weight: 600; color: #f97316; text-decoration: none; white-space: nowrap; }
+        .bk-login-banner-link { font-size: 13px; font-weight: 600; color: var(--brand); text-decoration: none; white-space: nowrap; }
         @media (max-width: 520px) {
           .bk-body { padding: 20px 16px 80px; }
           .bk-card { padding: 20px; }
@@ -266,8 +270,11 @@ export default function BookDelivery() {
       <div className="bk-root">
         <nav className="bk-nav">
           <a href="/" className="bk-logo">
-            <div className="bk-logo-icon">🚀</div>
-            SwiftByGwyn
+            {logo
+              ? <img src={logo} alt="logo" style={{ width:32, height:32, borderRadius:7, objectFit:'cover', flexShrink:0 }} />
+              : <div className="bk-logo-icon">🚀</div>
+            }
+            {bizName}
           </a>
           <div className="bk-nav-right">
             {customer && (
@@ -278,7 +285,6 @@ export default function BookDelivery() {
         </nav>
 
         <div className="bk-body">
-          {/* Login banner for guests */}
           {!customer && (
             <div className="bk-login-banner">
               <span style={{ fontSize:20 }}>💡</span>
@@ -287,7 +293,6 @@ export default function BookDelivery() {
             </div>
           )}
 
-          {/* Steps */}
           <div className="bk-steps">
             {['Contact Details', 'Package Info', 'Confirm & Pay'].map((label, i) => (
               <div key={label} className="bk-step" style={{ flex: i < 2 ? 1 : 'none' }}>
@@ -339,7 +344,6 @@ export default function BookDelivery() {
                 onDistanceChange={(km) => setDistance(km)}
               />
               <div style={{ height:16 }} />
-
               <div className="bk-section-divider" />
               <div className="bk-section-title" style={{ fontSize:16, marginBottom:16 }}>🚚 Delivery Type</div>
               <div className="bk-type-grid" style={{ marginBottom:18 }}>
@@ -414,7 +418,7 @@ export default function BookDelivery() {
                 <div className="bk-summary-row"><span className="bk-summary-label">Recipient</span><span className="bk-summary-value">{form.recipientName} · {form.recipientPhone}</span></div>
                 <div className="bk-summary-row"><span className="bk-summary-label">Pickup</span><span className="bk-summary-value">{form.pickupLocation}</span></div>
                 <div className="bk-summary-row"><span className="bk-summary-label">Drop-off</span><span className="bk-summary-value">{form.dropoffLocation}</span></div>
-                {distance > 0 && <div className="bk-summary-row"><span className="bk-summary-label">Distance</span><span className="bk-summary-value" style={{ color:'#f97316' }}>{distance} km</span></div>}
+                {distance > 0 && <div className="bk-summary-row"><span className="bk-summary-label">Distance</span><span className="bk-summary-value" style={{ color: brandColor }}>{distance} km</span></div>}
                 <div className="bk-summary-row"><span className="bk-summary-label">Package</span><span className="bk-summary-value">{form.packageDescription}</span></div>
                 {form.deliveryType === 'scheduled' && (
                   <div className="bk-summary-row"><span className="bk-summary-label">Scheduled</span><span className="bk-summary-value">{form.scheduledDate} at {form.scheduledTime}</span></div>
