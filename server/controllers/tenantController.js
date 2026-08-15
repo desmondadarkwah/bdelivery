@@ -144,3 +144,57 @@ export const updateTenantMe = async (req, res) => {
     res.status(500).json({ error: err.message })
   }
 }
+
+// GET /api/tenant/plan — get tenant plan info and usage
+export const getTenantPlanInfo = async (req, res) => {
+  try {
+    const Order = (await import('../models/Order.js')).default
+    const Rider = (await import('../models/Rider.js')).default
+
+    const tenant = await Tenant.findById(req.tenant.id).select('-adminPassword')
+
+    const PLAN_LIMITS = {
+      trial:   { orders: 50,   riders: 3 },
+      starter: { orders: 200,  riders: 5 },
+      growth:  { orders: 1000, riders: 15 },
+      pro:     { orders: Infinity, riders: Infinity },
+    }
+
+    const limits = PLAN_LIMITS[tenant.plan] || PLAN_LIMITS.trial
+
+    // Orders this month
+    const startOfMonth = new Date()
+    startOfMonth.setDate(1)
+    startOfMonth.setHours(0, 0, 0, 0)
+    const ordersThisMonth = await Order.countDocuments({
+      tenantId: tenant._id.toString(),
+      createdAt: { $gte: startOfMonth }
+    })
+
+    const riderCount = await Rider.countDocuments({ tenantId: tenant._id.toString() })
+
+    // Days left on trial
+    let trialDaysLeft = null
+    if (tenant.status === 'trial' && tenant.trialEndsAt) {
+      const diff = new Date(tenant.trialEndsAt) - new Date()
+      trialDaysLeft = Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)))
+    }
+
+    res.json({
+      success: true,
+      data: {
+        plan: tenant.plan,
+        status: tenant.status,
+        trialEndsAt: tenant.trialEndsAt,
+        trialDaysLeft,
+        limits,
+        usage: {
+          ordersThisMonth,
+          riderCount,
+        }
+      }
+    })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}

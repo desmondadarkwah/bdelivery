@@ -6,7 +6,7 @@ import {
   getStats, getAllOrders, getAllRiders,
   createRider, updateRiderStatus, deleteRider,
   assignRider, updateOrderStatus,
-  fetchSettings, updateSettings, changeAdminPassword,
+  fetchSettings, updateSettings, updateTenantMe, changeAdminPassword,
   fetchAllCustomers, deleteCustomer,
 } from '../utils/api'
 
@@ -43,13 +43,15 @@ function StatusBadge({ status }) {
 function SettingsTab({ brand }) {
   const [form, setForm] = useState({
     businessName:'', whatsapp:'', email:'', phone:'',
-    address:'', coverageArea:'',
+    address:'', coverageArea:'', brandColor:'#f97316',
     standardFee:30, sameDayFee:50, expressFee:80, scheduledFee:40,
   })
+  const [logo, setLogo]       = useState(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving]   = useState(false)
   const [success, setSuccess] = useState(false)
   const [error, setError]     = useState('')
+  const [preview, setPreview] = useState(null)
 
   useEffect(() => {
     fetchSettings()
@@ -61,6 +63,7 @@ function SettingsTab({ brand }) {
           phone:        s.phone        || '',
           address:      s.address      || '',
           coverageArea: s.coverageArea || '',
+          brandColor:   s.brandColor   || '#f97316',
           standardFee:  s.standardFee  || 30,
           sameDayFee:   s.sameDayFee   || 50,
           expressFee:   s.expressFee   || 80,
@@ -71,11 +74,23 @@ function SettingsTab({ brand }) {
       .catch(console.error)
   }, [])
 
+  const handleLogoChange = (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+    setLogo(file)
+    setPreview(URL.createObjectURL(file))
+  }
+
   const save = async () => {
     setSaving(true); setSuccess(false); setError('')
     try {
-      await updateSettings(form)
+      const fd = new FormData()
+      Object.entries(form).forEach(([k, v]) => fd.append(k, v))
+      if (logo) fd.append('logo', logo)
+      await updateTenantMe(fd)
       setSuccess(true)
+      // Update CSS variable live
+      document.documentElement.style.setProperty('--brand', form.brandColor)
       setTimeout(() => setSuccess(false), 3000)
     } catch(e) { setError(e.response?.data?.error || 'Failed to save settings.') }
     finally { setSaving(false) }
@@ -86,6 +101,71 @@ function SettingsTab({ brand }) {
   return (
     <div>
       <div className="adm-page-title">Settings</div>
+
+      {/* BRANDING */}
+      <div style={{ background:'rgba(255,255,255,0.03)', border:'1px solid rgba(255,255,255,0.07)', borderRadius:16, padding:24, marginBottom:16 }}>
+        <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:15, color:'#fff', marginBottom:20 }}>Branding</div>
+
+        {/* Logo Upload */}
+        <div style={{ marginBottom:20 }}>
+          <div className="adm-form-label" style={{ marginBottom:10 }}>Business Logo</div>
+          <div style={{ display:'flex', alignItems:'center', gap:16, flexWrap:'wrap' }}>
+            <div style={{ width:72, height:72, borderRadius:12, background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.1)', overflow:'hidden', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+              {preview || brand?.logo
+                ? <img src={preview || brand?.logo} alt="logo" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+                : <span style={{ fontSize:28 }}>🚀</span>
+              }
+            </div>
+            <div>
+              <button type="button" onClick={() => document.getElementById('logo-upload').click()} style={{ padding:'9px 18px', background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.12)', borderRadius:8, color:'rgba(240,244,255,0.7)', fontSize:13, cursor:'pointer', marginBottom:6, display:'block' }}>
+                📷 Upload Logo
+              </button>
+              <div style={{ fontSize:11, color:'rgba(240,244,255,0.25)' }}>PNG, JPG recommended. Square works best.</div>
+              <input id="logo-upload" type="file" accept="image/*" style={{ display:'none' }} onChange={handleLogoChange} />
+            </div>
+          </div>
+        </div>
+
+        {/* Brand Color */}
+        <div className="adm-form-field">
+          <label className="adm-form-label">Brand Color</label>
+          <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+            <input
+              type="color"
+              value={form.brandColor}
+              onChange={e => {
+                setForm({...form, brandColor: e.target.value})
+                document.documentElement.style.setProperty('--brand', e.target.value)
+              }}
+              style={{ width:48, height:44, border:'none', background:'none', cursor:'pointer', borderRadius:8, padding:0 }}
+            />
+            <input
+              className="adm-form-input"
+              value={form.brandColor}
+              onChange={e => {
+                setForm({...form, brandColor: e.target.value})
+                document.documentElement.style.setProperty('--brand', e.target.value)
+              }}
+              placeholder="#f97316"
+              style={{ maxWidth:140 }}
+            />
+            <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+              {['#f97316','#6366f1','#22c55e','#ef4444','#3b82f6','#8b5cf6','#ec4899','#14b8a6'].map(c => (
+                <div
+                  key={c}
+                  onClick={() => {
+                    setForm({...form, brandColor: c})
+                    document.documentElement.style.setProperty('--brand', c)
+                  }}
+                  style={{ width:24, height:24, borderRadius:'50%', background:c, cursor:'pointer', border: form.brandColor === c ? '2px solid #fff' : '2px solid transparent', transition:'border 0.2s' }}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* BUSINESS INFO */}
       <div style={{ background:'rgba(255,255,255,0.03)', border:'1px solid rgba(255,255,255,0.07)', borderRadius:16, padding:24, marginBottom:16 }}>
         <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:15, color:'#fff', marginBottom:20 }}>Business Information</div>
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
@@ -104,6 +184,8 @@ function SettingsTab({ brand }) {
           ))}
         </div>
       </div>
+
+      {/* FEES */}
       <div style={{ background:'rgba(255,255,255,0.03)', border:'1px solid rgba(255,255,255,0.07)', borderRadius:16, padding:24, marginBottom:16 }}>
         <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:15, color:'#fff', marginBottom:20 }}>Delivery Fees (GHS)</div>
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
@@ -120,8 +202,9 @@ function SettingsTab({ brand }) {
           ))}
         </div>
       </div>
+
       {error && <div className="adm-form-error" style={{ marginBottom:14 }}>✕ {error}</div>}
-      {success && <div style={{ padding:'12px 16px', background:'rgba(34,197,94,0.1)', border:'1px solid rgba(34,197,94,0.25)', borderRadius:10, color:'#86efac', fontSize:13, marginBottom:14 }}>✓ Settings saved!</div>}
+      {success && <div style={{ padding:'12px 16px', background:'rgba(34,197,94,0.1)', border:'1px solid rgba(34,197,94,0.25)', borderRadius:10, color:'#86efac', fontSize:13, marginBottom:14 }}>✓ Settings saved! Refresh to see all changes.</div>}
       <button className="adm-form-btn" style={{ maxWidth:200 }} onClick={save} disabled={saving}>
         {saving ? 'Saving...' : success ? '✓ Saved!' : 'Save Changes'}
       </button>
@@ -792,3 +875,6 @@ export default function AdminDashboard() {
     </>
   )
 }
+
+// Email: admin@swiftbygwyn.com
+// Password: swift2024
