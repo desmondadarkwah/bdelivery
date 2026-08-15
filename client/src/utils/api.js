@@ -297,3 +297,8 @@ export const updateSettings = async (payload) => {
   const { data } = await axiosInstance.put('/api/tenant/me', payload)
   return data.data
 }
+
+export const fetchTenantPlanInfo = async () => {
+  const { data } = await axiosInstance.get('/api/tenant/plan')
+  return data.data
+}

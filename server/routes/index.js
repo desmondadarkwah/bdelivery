@@ -26,11 +26,11 @@ router.put('/super/tenants/:id/status', protectSuperAdmin, updateTenantStatus)
 router.delete('/super/tenants/:id', protectSuperAdmin, deleteTenant)
 
 // ─── TENANT (PUBLIC) ──────────────────────────────────
-router.get('/tenant/:subdomain', getTenantBySubdomain)
-router.post('/tenant/login', loginTenantAdmin)
+router.get('/tenant/plan', protectTenant, getTenantPlanInfo)
 router.get('/tenant/me', protectTenant, getTenantMe)
 router.put('/tenant/me', protectTenant, upload.single('logo'), updateTenantMe)
-router.get('/tenant/plan', protectTenant, getTenantPlanInfo)
+router.post('/tenant/login', loginTenantAdmin)
+router.get('/tenant/:subdomain', getTenantBySubdomain)
 
 // ─── ALL ROUTES BELOW NEED TENANT CONTEXT ─────────────
 router.use(resolveTenant)
