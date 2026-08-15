@@ -9,6 +9,8 @@ const riderSchema = new mongoose.Schema({
   phone: { type: String, required: true },
   status: { type: String, enum: ['active', 'suspended'], default: 'active' },
   totalDeliveries: { type: Number, default: 0 },
+  isOnline: { type: Boolean, default: false },
+  lastSeenAt: { type: Date, default: null },
 }, { timestamps: true })
 
 riderSchema.pre('save', async function () {

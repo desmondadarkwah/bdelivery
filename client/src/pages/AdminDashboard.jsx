@@ -9,7 +9,8 @@ import {
   fetchSettings, updateSettings, updateTenantMe, changeAdminPassword,
   fetchAllCustomers, deleteCustomer, fetchTenantPlanInfo
 } from '../utils/api'
-
+import { useSocket } from '../context/SocketContext'
+import NotificationBell from '../components/NotificationBell'
 
 
 const STATUS_COLORS = {
@@ -399,6 +400,9 @@ export default function AdminDashboard() {
   const { logout } = useAdminAuth()
   const { tenant } = useTenant()
   const { adminTenant } = useAdminAuth()
+  const { socket } = useSocket()
+  const tenantId = adminTenant?.id || adminTenant?._id
+
   const navigate = useNavigate()
 
   const brand = tenant || adminTenant
@@ -422,21 +426,31 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     loadAll()
-    const interval = setInterval(() => { loadAll() }, 30000)
-    return () => clearInterval(interval)
-  }, [])
 
-const loadAll = async () => {
-  setLoading(true)
-  try {
-    const [s, o, r, c, p] = await Promise.all([
-      getStats(), getAllOrders(), getAllRiders(),
-      fetchAllCustomers(), fetchTenantPlanInfo()
-    ])
-    setStats(s); setOrders(o); setRiders(r); setCustomers(c); setPlanInfo(p)
-  } catch(e) { console.error(e) }
-  finally { setLoading(false) }
-}
+    if (socket && tenantId) {
+      socket.emit('admin:join', tenantId)
+
+      socket.on('order:new', () => { loadAll() })
+      socket.on('order:updated', () => { loadAll() })
+
+      return () => {
+        socket.off('order:new')
+        socket.off('order:updated')
+      }
+    }
+  }, [socket, tenantId])
+
+  const loadAll = async () => {
+    setLoading(true)
+    try {
+      const [s, o, r, c, p] = await Promise.all([
+        getStats(), getAllOrders(), getAllRiders(),
+        fetchAllCustomers(), fetchTenantPlanInfo()
+      ])
+      setStats(s); setOrders(o); setRiders(r); setCustomers(c); setPlanInfo(p)
+    } catch (e) { console.error(e) }
+    finally { setLoading(false) }
+  }
 
   const loadOrders = async (status) => {
     try { const o = await getAllOrders(status); setOrders(o) }
@@ -586,6 +600,10 @@ const loadAll = async () => {
             </div>
           ))}
           <div className="adm-sidebar-bottom">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <div style={{ fontSize: 11, color: 'rgba(240,244,255,0.3)' }}>Notifications</div>
+              <NotificationBell tenantId={tenantId} brandColor={brandColor} />
+            </div>
             <button className="adm-logout-btn" onClick={handleLogout}>Sign Out</button>
           </div>
         </aside>

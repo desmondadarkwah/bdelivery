@@ -302,3 +302,9 @@ export const fetchTenantPlanInfo = async () => {
   const { data } = await axiosInstance.get('/api/tenant/plan')
   return data.data
 }
+
+// ─── RIDER ONLINE/OFFLINE ─────────────────────────────
+export const toggleRiderOnline = async (isOnline) => {
+  const { data } = await axiosInstance.put('/api/riders/me/online', { isOnline })
+  return data.data
+}

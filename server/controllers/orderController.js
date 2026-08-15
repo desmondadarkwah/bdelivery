@@ -1,6 +1,8 @@
 import Order from '../models/Order.js'
 import Counter from '../models/Counter.js'
 
+import { io } from '../index.js'
+
 // Generate unique Order ID
 const generateOrderID = () => {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
@@ -51,6 +53,15 @@ export const createOrder = async (req, res) => {
       packageDescription, additionalNotes,
       packageImage,
       deliveryFee, paymentMethod,
+    })
+
+    // Notify all riders and admin in this tenant of new order
+    io.to(`tenant:${order.tenantId}`).emit('order:new', {
+      orderID: order.orderID,
+      pickupLocation: order.pickupLocation,
+      dropoffLocation: order.dropoffLocation,
+      deliveryType: order.deliveryType,
+      deliveryFee: order.deliveryFee,
     })
 
     res.status(201).json({ success: true, data: order })
@@ -120,6 +131,13 @@ export const updateOrderStatus = async (req, res) => {
       { status },
       { new: true }
     ).populate('assignedRider', 'name phone')
+
+    io.to(`tenant:${updated.tenantId}`).emit('order:updated', {
+      orderId: updated._id,
+      orderID: updated.orderID,
+      status: updated.status,
+    })
+
     res.json({ success: true, data: order })
   } catch (err) {
     res.status(500).json({ error: err.message })
@@ -141,6 +159,7 @@ export const uploadProof = async (req, res) => {
       const Rider = (await import('../models/Rider.js')).default
       await Rider.findByIdAndUpdate(order.assignedRider, { $inc: { totalDeliveries: 1 } })
     }
+
     res.json({ success: true, data: order })
   } catch (err) {
     res.status(500).json({ error: err.message })
@@ -173,6 +192,12 @@ export const getStats = async (req, res) => {
 // GET /api/orders/available — rider sees all unassigned orders
 export const getAvailableOrders = async (req, res) => {
   try {
+    // Check if rider is online
+    const rider = await Rider.findById(req.rider.id)
+    if (!rider.isOnline) {
+      return res.json({ success: true, data: [] })
+    }
+
     const orders = await Order.find({
       status: 'received',
       assignedRider: null,
@@ -197,6 +222,12 @@ export const selfAssignOrder = async (req, res) => {
       { assignedRider: req.rider.id, status: 'assigned' },
       { new: true }
     ).populate('assignedRider', 'name phone')
+
+    io.to(`tenant:${updated.tenantId}`).emit('order:updated', {
+      orderId: updated._id,
+      orderID: updated.orderID,
+      status: updated.status,
+    })
 
     res.json({ success: true, data: updated })
   } catch (err) {

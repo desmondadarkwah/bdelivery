@@ -6,7 +6,7 @@ import { upload } from '../middleware/uploadMiddleware.js'
 // Controllers
 import { setupSuperAdmin, loginSuperAdmin, getPlatformStats } from '../controllers/superAdminController.js'
 import { createTenant, getAllTenants, getTenantBySubdomain, updateTenant, updateTenantStatus, deleteTenant, loginTenantAdmin, getTenantMe, updateTenantMe, getTenantPlanInfo } from '../controllers/tenantController.js'
-import { createRider, loginRider, getAllRiders, getRiderMe, updateRiderStatus, deleteRider } from '../controllers/riderController.js'
+import { createRider, loginRider, getAllRiders, getRiderMe, updateRiderStatus, deleteRider, toggleRiderOnline } from '../controllers/riderController.js'
 import { createOrder, getAllOrders, trackOrder, getRiderOrders, assignRider, updateOrderStatus, uploadProof, getStats, getAvailableOrders, selfAssignOrder } from '../controllers/orderController.js'
 import { registerCustomer, loginCustomer, getCustomerMe, updateCustomerProfile, changeCustomerPassword, getCustomerOrders, getAllCustomers, deleteCustomer } from '../controllers/customerController.js'
 
@@ -64,5 +64,7 @@ router.put('/customers/me/password', protectCustomer, changeCustomerPassword)
 router.get('/customers/orders', protectCustomer, getCustomerOrders)
 router.get('/customers/all', protectTenant, getAllCustomers)
 router.delete('/customers/:id', protectTenant, deleteCustomer)
+
+router.put('/riders/me/online', protectRider, toggleRiderOnline)
 
 export default router

@@ -77,3 +77,17 @@ export const deleteRider = async (req, res) => {
     res.status(500).json({ error: err.message })
   }
 }
+
+export const toggleRiderOnline = async (req, res) => {
+  try {
+    const { isOnline } = req.body
+    const rider = await Rider.findByIdAndUpdate(
+      req.rider.id,
+      { isOnline, lastSeenAt: new Date() },
+      { new: true }
+    ).select('-password')
+    res.json({ success: true, data: rider })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}
