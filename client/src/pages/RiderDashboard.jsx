@@ -4,6 +4,8 @@ import { useRiderAuth } from '../context/RiderAuthContext'
 import { useTenant } from '../context/TenantContext'
 import { getRiderOrders, updateOrderStatus, uploadProof, getRiderMe, getAvailableOrders, selfAssignOrder } from '../utils/api'
 import RiderMap from '../components/RiderMap'
+import { useSocket } from '../context/SocketContext'
+import { toggleRiderOnline } from '../utils/api'
 
 const STATUS_LABELS = {
   received: 'Order Received', assigned: 'Assigned to You',
@@ -12,13 +14,13 @@ const STATUS_LABELS = {
 }
 
 const STATUS_COLORS = {
-  received:    { bg:'rgba(99,102,241,0.15)',  color:'#a5b4fc' },
-  assigned:    { bg:'rgba(249,115,22,0.15)',  color:'#fdba74' },
-  accepted:    { bg:'rgba(168,85,247,0.15)',  color:'#d8b4fe' },
-  'picked-up': { bg:'rgba(234,179,8,0.15)',   color:'#fde047' },
-  'in-transit':{ bg:'rgba(59,130,246,0.15)',  color:'#93c5fd' },
-  delivered:   { bg:'rgba(34,197,94,0.15)',   color:'#86efac' },
-  cancelled:   { bg:'rgba(239,68,68,0.15)',   color:'#fca5a5' },
+  received: { bg: 'rgba(99,102,241,0.15)', color: '#a5b4fc' },
+  assigned: { bg: 'rgba(249,115,22,0.15)', color: '#fdba74' },
+  accepted: { bg: 'rgba(168,85,247,0.15)', color: '#d8b4fe' },
+  'picked-up': { bg: 'rgba(234,179,8,0.15)', color: '#fde047' },
+  'in-transit': { bg: 'rgba(59,130,246,0.15)', color: '#93c5fd' },
+  delivered: { bg: 'rgba(34,197,94,0.15)', color: '#86efac' },
+  cancelled: { bg: 'rgba(239,68,68,0.15)', color: '#fca5a5' },
 }
 
 const DELIVERY_TYPE_LABELS = {
@@ -27,9 +29,9 @@ const DELIVERY_TYPE_LABELS = {
 }
 
 const NEXT_ACTION = {
-  assigned:    { label:'✅ Accept Delivery',    next:'accepted',   btn:'rd-btn-orange' },
-  accepted:    { label:'📦 Mark as Picked Up',  next:'picked-up',  btn:'rd-btn-orange' },
-  'picked-up': { label:'🚀 Mark as In Transit', next:'in-transit', btn:'rd-btn-blue' },
+  assigned: { label: '✅ Accept Delivery', next: 'accepted', btn: 'rd-btn-orange' },
+  accepted: { label: '📦 Mark as Picked Up', next: 'picked-up', btn: 'rd-btn-orange' },
+  'picked-up': { label: '🚀 Mark as In Transit', next: 'in-transit', btn: 'rd-btn-blue' },
 }
 
 export default function RiderDashboard() {
@@ -37,35 +39,79 @@ export default function RiderDashboard() {
   const { tenant } = useTenant()
   const navigate = useNavigate()
 
-  const bizName    = tenant?.businessName || 'Bdelivery'
-  const brandColor = tenant?.brandColor   || '#f97316'
-  const logo       = tenant?.logo         || null
+  const bizName = tenant?.businessName || 'Bdelivery'
+  const brandColor = tenant?.brandColor || '#f97316'
+  const logo = tenant?.logo || null
 
-  const [orders, setOrders]               = useState([])
+  const [orders, setOrders] = useState([])
   const [availableOrders, setAvailableOrders] = useState([])
-  const [riderInfo, setRiderInfo]         = useState(null)
-  const [loading, setLoading]             = useState(true)
+  const [riderInfo, setRiderInfo] = useState(null)
+  const [loading, setLoading] = useState(true)
   const [selectedOrder, setSelectedOrder] = useState(null)
-  const [activeTab, setActiveTab]         = useState('available')
-  const [proofPhoto, setProofPhoto]       = useState(null)
-  const [proofName, setProofName]         = useState('')
-  const [proofLoading, setProofLoading]   = useState(false)
-  const [proofError, setProofError]       = useState('')
+  const [activeTab, setActiveTab] = useState('available')
+  const [proofPhoto, setProofPhoto] = useState(null)
+  const [proofName, setProofName] = useState('')
+  const [proofLoading, setProofLoading] = useState(false)
+  const [proofError, setProofError] = useState('')
   const [actionLoading, setActionLoading] = useState(false)
   const [acceptLoading, setAcceptLoading] = useState(null)
 
+  const { socket } = useSocket()
+  const [isOnline, setIsOnline] = useState(false)
+  const [togglingOnline, setTogglingOnline] = useState(false)
+
   useEffect(() => {
     loadAll()
-    const interval = setInterval(() => { loadAll() }, 15000)
-    return () => clearInterval(interval)
   }, [])
 
-  const loadAll = async () => {
+  useEffect(() => {
+    if (!socket || !rider) return
+    const tenantId = riderInfo?.tenantId || ''
+
+    if (isOnline) {
+      socket.emit('rider:online', {
+        riderId: rider.id || rider._id,
+        tenantId,
+        name: riderInfo?.name || rider?.name,
+      })
+    } else {
+      socket.emit('rider:offline', {
+        riderId: rider.id || rider._id,
+        tenantId,
+        name: riderInfo?.name || rider?.name,
+      })
+    }
+  }, [socket, isOnline, riderInfo])
+
+  useEffect(() => {
+    if (!socket) return
+    socket.on('order:new', () => { if (isOnline) loadAll() })
+    socket.on('order:updated', () => { loadAll() })
+    return () => {
+      socket.off('order:new')
+      socket.off('order:updated')
+    }
+  }, [socket, isOnline])
+
+const loadAll = async () => {
+  try {
+    const [o, r, a] = await Promise.all([getRiderOrders(), getRiderMe(), getAvailableOrders()])
+    setOrders(o)
+    setRiderInfo(r)
+    setAvailableOrders(a)
+    // Restore online status from server
+    setIsOnline(r?.isOnline || false)
+  } catch(e) { console.error(e) }
+  finally { setLoading(false) }
+}
+
+  const handleToggleOnline = async () => {
+    setTogglingOnline(true)
     try {
-      const [o, r, a] = await Promise.all([getRiderOrders(), getRiderMe(), getAvailableOrders()])
-      setOrders(o); setRiderInfo(r); setAvailableOrders(a)
-    } catch(e) { console.error(e) }
-    finally { setLoading(false) }
+      const updated = await toggleRiderOnline(!isOnline)
+      setIsOnline(updated.isOnline)
+    } catch (e) { console.error(e) }
+    finally { setTogglingOnline(false) }
   }
 
   const handleStatusUpdate = async (orderId, status) => {
@@ -74,7 +120,7 @@ export default function RiderDashboard() {
       await updateOrderStatus(orderId, status)
       await loadAll()
       setSelectedOrder(prev => prev ? { ...prev, status } : null)
-    } catch(e) { alert(e.response?.data?.error || 'Failed to update status') }
+    } catch (e) { alert(e.response?.data?.error || 'Failed to update status') }
     finally { setActionLoading(false) }
   }
 
@@ -85,7 +131,7 @@ export default function RiderDashboard() {
       await loadAll()
       setSelectedOrder(null)
       setActiveTab('active')
-    } catch(e) { alert(e.response?.data?.error || 'Failed to accept order.') }
+    } catch (e) { alert(e.response?.data?.error || 'Failed to accept order.') }
     finally { setAcceptLoading(null) }
   }
 
@@ -99,19 +145,19 @@ export default function RiderDashboard() {
       await uploadProof(selectedOrder._id, fd)
       await loadAll()
       setSelectedOrder(null); setProofPhoto(null); setProofName('')
-    } catch(e) { setProofError(e.response?.data?.error || 'Failed to submit proof.') }
+    } catch (e) { setProofError(e.response?.data?.error || 'Failed to submit proof.') }
     finally { setProofLoading(false) }
   }
 
   const handleLogout = () => { logout(); navigate('/rider/login') }
 
-  const activeOrders    = orders.filter(o => !['delivered','cancelled'].includes(o.status))
+  const activeOrders = orders.filter(o => !['delivered', 'cancelled'].includes(o.status))
   const completedOrders = orders.filter(o => o.status === 'delivered')
-  const urgentOrders    = availableOrders.filter(o => o.deliveryType === 'express')
+  const urgentOrders = availableOrders.filter(o => o.deliveryType === 'express')
 
   const displayOrders = activeTab === 'available' ? availableOrders
     : activeTab === 'active' ? activeOrders
-    : completedOrders
+      : completedOrders
 
   return (
     <>
@@ -227,14 +273,30 @@ export default function RiderDashboard() {
         <nav className="rd-topbar">
           <div className="rd-topbar-logo">
             {logo
-              ? <img src={logo} alt="logo" style={{ width:32, height:32, borderRadius:8, objectFit:'cover', flexShrink:0 }} />
+              ? <img src={logo} alt="logo" style={{ width: 32, height: 32, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }} />
               : <div className="rd-topbar-logo-icon">🏍️</div>
             }
             {bizName}
           </div>
           <div className="rd-topbar-right">
+            {/* Online/Offline Toggle */}
+            <button
+              onClick={handleToggleOnline}
+              disabled={togglingOnline}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '6px 14px', borderRadius: 100,
+                background: isOnline ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)',
+                border: `1px solid ${isOnline ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'}`,
+                color: isOnline ? '#86efac' : '#fca5a5',
+                fontSize: 12, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s',
+              }}
+            >
+              <div style={{ width: 6, height: 6, borderRadius: '50%', background: isOnline ? '#22c55e' : '#ef4444', animation: isOnline ? 'rdPulse 2s infinite' : 'none' }} />
+              {togglingOnline ? '...' : isOnline ? 'Online' : 'Offline'}
+            </button>
+
             <div className="rd-rider-badge">
-              <div className="rd-rider-dot" />
               <span className="rd-rider-name">{riderInfo?.name || rider?.name || 'Rider'}</span>
             </div>
             <button className="rd-logout" onClick={handleLogout}>Sign Out</button>
@@ -254,7 +316,7 @@ export default function RiderDashboard() {
 
           <div className="rd-stats">
             <div className="rd-stat">
-              <div className="rd-stat-num" style={{ color:'#22c55e' }}>{availableOrders.length}</div>
+              <div className="rd-stat-num" style={{ color: '#22c55e' }}>{availableOrders.length}</div>
               <div className="rd-stat-label">Available</div>
             </div>
             <div className="rd-stat">
@@ -288,8 +350,18 @@ export default function RiderDashboard() {
           ) : activeTab === 'available' ? (
             availableOrders.length === 0 ? (
               <div className="rd-empty">
-                <div className="rd-empty-icon">🏍️</div>
-                <div className="rd-empty-text">No available orders right now.<br />New orders will appear here automatically.</div>
+                <div className="rd-empty-icon">{isOnline ? '🏍️' : '😴'}</div>
+                <div className="rd-empty-text">
+                  {isOnline
+                    ? 'No available orders right now.\nNew orders will appear here automatically.'
+                    : 'You are currently offline.\nGo online to start receiving delivery requests.'
+                  }
+                </div>
+                {!isOnline && (
+                  <button onClick={handleToggleOnline} style={{ marginTop: 16, padding: '12px 28px', background: '#22c55e', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+                    Go Online
+                  </button>
+                )}
               </div>
             ) : (
               availableOrders.map(order => {
@@ -299,14 +371,14 @@ export default function RiderDashboard() {
                     <div className="rd-available-head">
                       <div>
                         <div className="rd-available-id">{order.orderID}</div>
-                        <div style={{ fontSize:10, color:'rgba(240,244,255,0.3)', marginTop:3 }}>{DELIVERY_TYPE_LABELS[order.deliveryType]}</div>
+                        <div style={{ fontSize: 10, color: 'rgba(240,244,255,0.3)', marginTop: 3 }}>{DELIVERY_TYPE_LABELS[order.deliveryType]}</div>
                       </div>
-                      <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:4 }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
                         {isExpress
                           ? <span className="rd-express-badge">🚀 EXPRESS</span>
                           : <span className="rd-new-badge">🟢 NEW</span>
                         }
-                        <span style={{ fontSize:11, color: brandColor, fontWeight:700 }}>GHS {order.deliveryFee}</span>
+                        <span style={{ fontSize: 11, color: brandColor, fontWeight: 700 }}>GHS {order.deliveryFee}</span>
                       </div>
                     </div>
                     <div className="rd-route">
@@ -319,9 +391,9 @@ export default function RiderDashboard() {
                         <div><div className="rd-route-label">Drop-off</div><div className="rd-route-text">{order.dropoffLocation}</div></div>
                       </div>
                     </div>
-                    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8, flexWrap:'wrap', gap:8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
                       <div className="rd-order-meta">
-                        <div className="rd-meta-item">Package: <span>{order.packageDescription?.substring(0,30)}{order.packageDescription?.length > 30 ? '...' : ''}</span></div>
+                        <div className="rd-meta-item">Package: <span>{order.packageDescription?.substring(0, 30)}{order.packageDescription?.length > 30 ? '...' : ''}</span></div>
                         {order.distance > 0 && <div className="rd-meta-item">Distance: <span>{order.distance} km</span></div>}
                       </div>
                     </div>
@@ -353,7 +425,7 @@ export default function RiderDashboard() {
                       <div className="rd-order-id">{order.orderID}</div>
                       <div className="rd-order-type">{DELIVERY_TYPE_LABELS[order.deliveryType]}</div>
                     </div>
-                    <span className="rd-status-badge" style={{ background:sc.bg, color:sc.color }}>{STATUS_LABELS[order.status]}</span>
+                    <span className="rd-status-badge" style={{ background: sc.bg, color: sc.color }}>{STATUS_LABELS[order.status]}</span>
                   </div>
                   <div className="rd-route">
                     <div className="rd-route-item">
@@ -397,7 +469,7 @@ export default function RiderDashboard() {
             <div className="rd-modal-body">
               <div>
                 <div className="rd-section-title">Route & Navigation</div>
-                <div className="rd-info-grid" style={{ marginBottom:12 }}>
+                <div className="rd-info-grid" style={{ marginBottom: 12 }}>
                   <div className="rd-info-item">
                     <div className="rd-info-label">📍 Pickup</div>
                     <div className="rd-info-value">{selectedOrder.pickupLocation}</div>
@@ -413,14 +485,14 @@ export default function RiderDashboard() {
                   pickupCoords={selectedOrder.pickupCoords}
                   dropoffCoords={selectedOrder.dropoffCoords}
                 />
-                <a href={`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(selectedOrder.pickupLocation + ' Ghana')}&destination=${encodeURIComponent(selectedOrder.dropoffLocation + ' Ghana')}`} target="_blank" rel="noreferrer" className="rd-maps-btn" style={{ marginTop:10 }}>
+                <a href={`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(selectedOrder.pickupLocation + ' Ghana')}&destination=${encodeURIComponent(selectedOrder.dropoffLocation + ' Ghana')}`} target="_blank" rel="noreferrer" className="rd-maps-btn" style={{ marginTop: 10 }}>
                   🗺️ Open Google Maps Navigation
                 </a>
               </div>
 
               <div>
                 <div className="rd-section-title">Contacts</div>
-                <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   <div className="rd-contact-card">
                     <div>
                       <div className="rd-contact-label">Sender</div>
@@ -442,12 +514,12 @@ export default function RiderDashboard() {
 
               <div>
                 <div className="rd-section-title">Package Info</div>
-                <div className="rd-info-item" style={{ marginBottom:8 }}>
+                <div className="rd-info-item" style={{ marginBottom: 8 }}>
                   <div className="rd-info-label">What's being delivered</div>
                   <div className="rd-info-value">{selectedOrder.packageDescription}</div>
                 </div>
                 {selectedOrder.additionalNotes && (
-                  <div className="rd-info-item" style={{ marginBottom:8 }}>
+                  <div className="rd-info-item" style={{ marginBottom: 8 }}>
                     <div className="rd-info-label">Special Instructions</div>
                     <div className="rd-info-value">{selectedOrder.additionalNotes}</div>
                   </div>
@@ -455,7 +527,7 @@ export default function RiderDashboard() {
                 <div className="rd-info-grid">
                   <div className="rd-info-item">
                     <div className="rd-info-label">Payment Method</div>
-                    <div className="rd-info-value" style={{ textTransform:'capitalize' }}>{selectedOrder.paymentMethod?.replace('-',' ')}</div>
+                    <div className="rd-info-value" style={{ textTransform: 'capitalize' }}>{selectedOrder.paymentMethod?.replace('-', ' ')}</div>
                   </div>
                   <div className="rd-info-item">
                     <div className="rd-info-label">Delivery Fee</div>
@@ -463,7 +535,7 @@ export default function RiderDashboard() {
                   </div>
                 </div>
                 {selectedOrder.packageImage && (
-                  <img src={selectedOrder.packageImage} alt="Package" style={{ width:'100%', maxHeight:180, objectFit:'cover', borderRadius:10, marginTop:8 }} />
+                  <img src={selectedOrder.packageImage} alt="Package" style={{ width: '100%', maxHeight: 180, objectFit: 'cover', borderRadius: 10, marginTop: 8 }} />
                 )}
               </div>
 
@@ -486,7 +558,7 @@ export default function RiderDashboard() {
                   <input className="rd-proof-input" placeholder="Who received the package? (Full name)" value={proofName} onChange={e => setProofName(e.target.value)} />
                   <div className={`rd-file-zone${proofPhoto ? ' has-file' : ''}`} onClick={() => document.getElementById('proof-img').click()}>
                     {proofPhoto ? `✅ ${proofPhoto.name}` : '📷 Upload delivery photo (optional but recommended)'}
-                    <input id="proof-img" type="file" accept="image/*" style={{ display:'none' }} onChange={e => setProofPhoto(e.target.files[0])} />
+                    <input id="proof-img" type="file" accept="image/*" style={{ display: 'none' }} onChange={e => setProofPhoto(e.target.files[0])} />
                   </div>
                   {proofError && <div className="rd-proof-error">⚠️ {proofError}</div>}
                   <button className="rd-btn rd-btn-green" onClick={handleProofSubmit} disabled={proofLoading}>
