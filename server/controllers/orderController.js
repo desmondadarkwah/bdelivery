@@ -1,7 +1,8 @@
 import Order from '../models/Order.js'
 import Counter from '../models/Counter.js'
+import Rider from '../models/Rider.js'
 
-import { io } from '../index.js'
+import { getIO } from '../socket.js'
 
 // Generate unique Order ID
 const generateOrderID = () => {
@@ -56,7 +57,7 @@ export const createOrder = async (req, res) => {
     })
 
     // Notify all riders and admin in this tenant of new order
-    io.to(`tenant:${order.tenantId}`).emit('order:new', {
+  getIO()?.to(`tenant:${order.tenantId}`).emit('order:new', {
       orderID: order.orderID,
       pickupLocation: order.pickupLocation,
       dropoffLocation: order.dropoffLocation,
@@ -132,7 +133,7 @@ export const updateOrderStatus = async (req, res) => {
       { new: true }
     ).populate('assignedRider', 'name phone')
 
-    io.to(`tenant:${updated.tenantId}`).emit('order:updated', {
+    getIO()?.to(`tenant:${updated.tenantId}`).emit('order:updated', {
       orderId: updated._id,
       orderID: updated.orderID,
       status: updated.status,
@@ -192,8 +193,11 @@ export const getStats = async (req, res) => {
 // GET /api/orders/available — rider sees all unassigned orders
 export const getAvailableOrders = async (req, res) => {
   try {
-    // Check if rider is online
     const rider = await Rider.findById(req.rider.id)
+    
+    if (!rider) return res.status(404).json({ error: 'Rider not found.' })
+
+    // If offline return empty array
     if (!rider.isOnline) {
       return res.json({ success: true, data: [] })
     }
@@ -202,13 +206,16 @@ export const getAvailableOrders = async (req, res) => {
       status: 'received',
       assignedRider: null,
       tenantId: req.tenantId,
-    }).sort({ createdAt: -1 })
+    })
+    .populate('assignedRider', 'name phone')
+    .sort({ createdAt: -1 })
+
     res.json({ success: true, data: orders })
   } catch (err) {
+    console.error('getAvailableOrders error:', err)
     res.status(500).json({ error: err.message })
   }
 }
-
 // PUT /api/orders/:id/self-assign — rider accepts available order
 export const selfAssignOrder = async (req, res) => {
   try {
@@ -223,7 +230,7 @@ export const selfAssignOrder = async (req, res) => {
       { new: true }
     ).populate('assignedRider', 'name phone')
 
-    io.to(`tenant:${updated.tenantId}`).emit('order:updated', {
+    getIO()?.to(`tenant:${updated.tenantId}`).emit('order:updated', {
       orderId: updated._id,
       orderID: updated.orderID,
       status: updated.status,
