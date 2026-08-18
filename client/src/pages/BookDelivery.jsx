@@ -14,23 +14,53 @@ const DELIVERY_TYPES = [
 
 const RATE_PER_KM = 2
 
+function AuthModal({ onClose, brandColor, bizName }) {
+  return (
+    <div style={{ position:'fixed', inset:0, zIndex:300, background:'rgba(0,0,0,0.85)', backdropFilter:'blur(8px)', display:'flex', alignItems:'flex-end', justifyContent:'center' }}>
+      <div style={{ background:'#0f1525', border:'1px solid rgba(255,255,255,0.1)', borderTop:`2px solid ${brandColor}`, borderRadius:'20px 20px 0 0', width:'100%', maxWidth:480, padding:'32px 28px 48px', animation:'slideUp 0.3s ease' }}>
+        <style>{`@keyframes slideUp { from { transform: translateY(100%); opacity:0; } to { transform: translateY(0); opacity:1; } }`}</style>
+        <div style={{ textAlign:'center', marginBottom:28 }}>
+          <div style={{ fontSize:40, marginBottom:12 }}>🔐</div>
+          <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:800, fontSize:22, color:'#fff', marginBottom:8 }}>Sign In to Book</div>
+          <div style={{ fontSize:14, color:'rgba(240,244,255,0.45)', lineHeight:1.7 }}>
+            You need an account to book a delivery with {bizName}. It's free and takes less than a minute.
+          </div>
+        </div>
+        <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+          <a href="/login?from=/book" style={{ display:'block', padding:'14px', background: brandColor, color:'#fff', borderRadius:12, fontSize:14, fontWeight:700, textDecoration:'none', textAlign:'center' }}>
+            Sign In to My Account
+          </a>
+          <a href="/register?from=/book" style={{ display:'block', padding:'14px', background:'rgba(255,255,255,0.06)', color:'#fff', borderRadius:12, fontSize:14, fontWeight:600, textDecoration:'none', textAlign:'center', border:'1px solid rgba(255,255,255,0.1)' }}>
+            Create Free Account
+          </a>
+          <button onClick={onClose} style={{ padding:'12px', background:'transparent', color:'rgba(240,244,255,0.3)', border:'none', borderRadius:12, fontSize:13, cursor:'pointer' }}>
+            Continue as Guest →
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function BookDelivery() {
   const navigate = useNavigate()
-  const { customer } = useCustomerAuth()
+  const { customer, loading: authLoading } = useCustomerAuth()
   const { tenant } = useTenant()
 
-  const bizName    = tenant?.businessName  || 'Bdelivery'
-  const brandColor = tenant?.brandColor    || '#f97316'
-  const logo       = tenant?.logo          || null
+  const bizName    = tenant?.businessName || 'Bdelivery'
+  const brandColor = tenant?.brandColor   || '#f97316'
+  const logo       = tenant?.logo         || null
 
-  const [step, setStep]           = useState(1)
-  const [loading, setLoading]     = useState(false)
-  const [error, setError]         = useState('')
-  const [success, setSuccess]     = useState(null)
-  const [packageImage, setPackageImage] = useState(null)
+  const [step, setStep]                   = useState(1)
+  const [loading, setLoading]             = useState(false)
+  const [error, setError]                 = useState('')
+  const [success, setSuccess]             = useState(null)
+  const [packageImage, setPackageImage]   = useState(null)
   const [pickupCoords, setPickupCoords]   = useState(null)
   const [dropoffCoords, setDropoffCoords] = useState(null)
-  const [distance, setDistance]   = useState(0)
+  const [distance, setDistance]           = useState(0)
+  const [showAuthModal, setShowAuthModal] = useState(false)
+  const [guestMode, setGuestMode]         = useState(false)
 
   const [form, setForm] = useState({
     customerName: '', customerPhone: '',
@@ -42,8 +72,22 @@ export default function BookDelivery() {
     paymentMethod: 'cash',
   })
 
+  // Show auth modal only after auth context has loaded
+  useEffect(() => {
+    if (authLoading) return
+    if (customer) {
+      setShowAuthModal(false)
+      return
+    }
+    if (!guestMode) {
+      setShowAuthModal(true)
+    }
+  }, [customer, guestMode, authLoading])
+
+  // Auto-fill form when customer logs in
   useEffect(() => {
     if (customer) {
+      setShowAuthModal(false)
       setForm(prev => ({
         ...prev,
         customerName:  customer.name  || prev.customerName,
@@ -69,6 +113,12 @@ export default function BookDelivery() {
 
   const nextStep = () => {
     setError('')
+
+    if (step === 1 && !customer && !guestMode) {
+      setShowAuthModal(true)
+      return
+    }
+
     if (step === 1) {
       if (!form.customerName.trim()) { setError('Please enter your full name.'); return }
       if (!validatePhone(form.customerPhone)) { setError('Please enter a valid phone number (at least 10 digits).'); return }
@@ -76,8 +126,8 @@ export default function BookDelivery() {
       if (!validatePhone(form.recipientPhone)) { setError('Please enter a valid recipient phone number.'); return }
     }
     if (step === 2) {
-      if (!form.pickupLocation.trim()) { setError('Please pin your pickup location on the map.'); return }
-      if (!form.dropoffLocation.trim()) { setError('Please pin your drop-off location on the map.'); return }
+      if (!form.pickupLocation.trim()) { setError('Please pin your pickup location.'); return }
+      if (!form.dropoffLocation.trim()) { setError('Please pin your drop-off location.'); return }
       if (form.pickupLocation.trim().toLowerCase() === form.dropoffLocation.trim().toLowerCase()) { setError('Pickup and drop-off locations cannot be the same.'); return }
       if (!form.packageDescription.trim()) { setError('Please describe what is being delivered.'); return }
       if (form.deliveryType === 'scheduled') {
@@ -92,6 +142,10 @@ export default function BookDelivery() {
   }
 
   const handleSubmit = async () => {
+    if (!customer && !guestMode) {
+      setShowAuthModal(true)
+      return
+    }
     setLoading(true); setError('')
     try {
       const fd = new FormData()
@@ -268,6 +322,14 @@ export default function BookDelivery() {
       `}</style>
 
       <div className="bk-root">
+        {showAuthModal && !authLoading && (
+          <AuthModal
+            brandColor={brandColor}
+            bizName={bizName}
+            onClose={() => { setShowAuthModal(false); setGuestMode(true) }}
+          />
+        )}
+
         <nav className="bk-nav">
           <a href="/" className="bk-logo">
             {logo
@@ -277,19 +339,20 @@ export default function BookDelivery() {
             {bizName}
           </a>
           <div className="bk-nav-right">
-            {customer && (
-              <div className="bk-user-badge">👤 {customer.name?.split(' ')[0]}</div>
-            )}
+            {customer
+              ? <div className="bk-user-badge">👤 {customer.name?.split(' ')[0]}</div>
+              : guestMode && <div className="bk-user-badge" style={{ color:'rgba(240,244,255,0.4)', borderColor:'rgba(255,255,255,0.1)', background:'rgba(255,255,255,0.04)' }}>👤 Guest</div>
+            }
             <a href="/" className="bk-back">← Back</a>
           </div>
         </nav>
 
         <div className="bk-body">
-          {!customer && (
+          {!customer && guestMode && (
             <div className="bk-login-banner">
               <span style={{ fontSize:20 }}>💡</span>
-              <div className="bk-login-banner-text">Sign in to auto-fill your details and track all your orders in one place.</div>
-              <a href="/login" className="bk-login-banner-link">Sign In →</a>
+              <div className="bk-login-banner-text">Booking as guest. Sign in to track all your orders in one place.</div>
+              <a href="/login?from=/book" className="bk-login-banner-link">Sign In →</a>
             </div>
           )}
 

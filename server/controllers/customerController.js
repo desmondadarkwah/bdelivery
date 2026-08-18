@@ -38,9 +38,13 @@ export const loginCustomer = async (req, res) => {
 // GET /api/customers/me
 export const getCustomerMe = async (req, res) => {
   try {
-    const orders = await Order.find({ customer: req.customer.id, tenantId: req.tenantId })
+    const customer = await Customer.findById(req.customer.id).select('-password')
+    if (!customer) return res.status(404).json({ error: 'Customer not found.' })
     res.json({ success: true, customer })
-  } catch (err) { res.status(500).json({ error: err.message }) }
+  } catch (err) {
+    console.error('getCustomerMe error:', err)
+    res.status(500).json({ error: err.message })
+  }
 }
 
 // PUT /api/customers/me
