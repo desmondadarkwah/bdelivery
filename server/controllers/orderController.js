@@ -241,3 +241,35 @@ export const selfAssignOrder = async (req, res) => {
     res.status(500).json({ error: err.message })
   }
 }
+
+// PUT /api/orders/:id/payment — rider marks payment as collected
+export const markPaymentCollected = async (req, res) => {
+  try {
+    const order = await Order.findOne({
+      _id: req.params.id,
+      assignedRider: req.rider.id,
+      tenantId: req.tenantId,
+    })
+
+    if (!order) return res.status(404).json({ error: 'Order not found.' })
+    if (order.status !== 'delivered') return res.status(400).json({ error: 'Order must be delivered before marking payment.' })
+
+    const updated = await Order.findByIdAndUpdate(
+      req.params.id,
+      { paymentCollected: true, paymentCollectedAt: new Date() },
+      { new: true }
+    )
+
+    // Notify admin via socket
+    getIO()?.to(`tenant:${updated.tenantId}`).emit('payment:collected', {
+      orderId: updated._id,
+      orderID: updated.orderID,
+      amount: updated.deliveryFee,
+      riderName: req.rider.name,
+    })
+
+    res.json({ success: true, data: updated })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}

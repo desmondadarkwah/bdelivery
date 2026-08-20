@@ -308,3 +308,9 @@ export const toggleRiderOnline = async (isOnline) => {
   const { data } = await axiosInstance.put('/api/riders/me/online', { isOnline })
   return data.data
 }
+
+//payment
+export const markPaymentCollected = async (orderId) => {
+  const { data } = await axiosInstance.put(`/api/orders/${orderId}/payment`)
+  return data.data
+}

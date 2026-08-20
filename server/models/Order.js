@@ -5,7 +5,7 @@ const orderSchema = new mongoose.Schema({
   //tenant
   tenantId: { type: String, required: true, index: true },
 
-  
+
   orderID: { type: String, unique: true },
 
   // Customer info
@@ -57,11 +57,11 @@ const orderSchema = new mongoose.Schema({
   },
 
   // Status
-status: {
-  type: String,
-  enum: ['received', 'assigned', 'accepted', 'picked-up', 'in-transit', 'delivered', 'cancelled'],
-  default: 'received'
-},
+  status: {
+    type: String,
+    enum: ['received', 'assigned', 'accepted', 'picked-up', 'in-transit', 'delivered', 'cancelled'],
+    default: 'received'
+  },
 
   // Rider
   assignedRider: { type: mongoose.Schema.Types.ObjectId, ref: 'Rider', default: null },
@@ -72,6 +72,10 @@ status: {
   // Proof of delivery
   proofPhoto: { type: String, default: '' },
   proofRecipientName: { type: String, default: '' },
+
+  //payment
+  paymentCollected: { type: Boolean, default: false },
+  paymentCollectedAt: { type: Date, default: null },
 
 }, { timestamps: true })
 

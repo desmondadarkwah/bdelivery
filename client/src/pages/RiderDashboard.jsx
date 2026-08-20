@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useRiderAuth } from '../context/RiderAuthContext'
 import { useTenant } from '../context/TenantContext'
-import { getRiderOrders, updateOrderStatus, uploadProof, getRiderMe, getAvailableOrders, selfAssignOrder } from '../utils/api'
+import { getRiderOrders, updateOrderStatus, uploadProof, getRiderMe, getAvailableOrders, selfAssignOrder, markPaymentCollected } from '../utils/api'
 import RiderMap from '../components/RiderMap'
 import { useSocket } from '../context/SocketContext'
 import { toggleRiderOnline } from '../utils/api'
@@ -93,17 +93,17 @@ export default function RiderDashboard() {
     }
   }, [socket, isOnline])
 
-const loadAll = async () => {
-  try {
-    const [o, r, a] = await Promise.all([getRiderOrders(), getRiderMe(), getAvailableOrders()])
-    setOrders(o)
-    setRiderInfo(r)
-    setAvailableOrders(a)
-    // Restore online status from server
-    setIsOnline(r?.isOnline || false)
-  } catch(e) { console.error(e) }
-  finally { setLoading(false) }
-}
+  const loadAll = async () => {
+    try {
+      const [o, r, a] = await Promise.all([getRiderOrders(), getRiderMe(), getAvailableOrders()])
+      setOrders(o)
+      setRiderInfo(r)
+      setAvailableOrders(a)
+      // Restore online status from server
+      setIsOnline(r?.isOnline || false)
+    } catch (e) { console.error(e) }
+    finally { setLoading(false) }
+  }
 
   const handleToggleOnline = async () => {
     setTogglingOnline(true)
@@ -571,9 +571,46 @@ const loadAll = async () => {
                 <div className="rd-delivered-box">
                   <div className="rd-delivered-icon">🎉</div>
                   <div className="rd-delivered-text">Delivery Completed!</div>
-                  {selectedOrder.proofRecipientName && <div className="rd-delivered-sub">Received by: {selectedOrder.proofRecipientName}</div>}
+                  {selectedOrder.proofRecipientName && (
+                    <div className="rd-delivered-sub">Received by: {selectedOrder.proofRecipientName}</div>
+                  )}
+
+                  {/* Payment Collection */}
+                  {selectedOrder.paymentMethod === 'cash' && (
+                    <div style={{ marginTop: 16, padding: '14px', background: 'rgba(255,255,255,0.04)', borderRadius: 12, border: '1px solid rgba(255,255,255,0.08)' }}>
+                      <div style={{ fontSize: 12, color: 'rgba(240,244,255,0.4)', marginBottom: 10 }}>Cash Payment Status</div>
+                      {selectedOrder.paymentCollected ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#86efac', fontSize: 13, fontWeight: 600 }}>
+                          <span style={{ fontSize: 18 }}>✅</span>
+                          Cash Collected — GHS {selectedOrder.deliveryFee}
+                        </div>
+                      ) : (
+                        <button
+                          onClick={async () => {
+                            try {
+                              await markPaymentCollected(selectedOrder._id)
+                              await loadAll()
+                              setSelectedOrder(prev => prev ? { ...prev, paymentCollected: true } : null)
+                            } catch (e) {
+                              alert(e.response?.data?.error || 'Failed to mark payment.')
+                            }
+                          }}
+                          style={{ width: '100%', padding: '11px', background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: 10, color: '#86efac', fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s' }}
+                        >
+                          💵 Mark Cash Collected — GHS {selectedOrder.deliveryFee}
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {selectedOrder.paymentMethod === 'mobile-money' && (
+                    <div style={{ marginTop: 16, padding: '12px 14px', background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: 10, fontSize: 12, color: '#93c5fd', textAlign: 'center' }}>
+                      📱 Mobile Money — Payment handled online
+                    </div>
+                  )}
                 </div>
               )}
+
             </div>
           </div>
         </div>
