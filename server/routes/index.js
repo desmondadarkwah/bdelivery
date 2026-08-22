@@ -34,6 +34,9 @@ router.get('/tenant/:subdomain', getTenantBySubdomain)
 
 // ─── ALL ROUTES BELOW NEED TENANT CONTEXT ─────────────
 router.use(resolveTenant)
+//payment
+router.put('/orders/:id/payment', protectRider, markPaymentCollected)
+
 
 // ─── RIDERS ───────────────────────────────────────────
 router.post('/riders/login', loginRider)
@@ -67,7 +70,5 @@ router.delete('/customers/:id', protectTenant, deleteCustomer)
 
 router.put('/riders/me/online', protectRider, toggleRiderOnline)
 
-//payment
-router.put('/orders/:id/payment', protectRider, markPaymentCollected)
 
 export default router

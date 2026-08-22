@@ -115,7 +115,7 @@ export const assignRider = async (req, res) => {
     const order = await Order.findByIdAndUpdate(
       req.params.id,
       { assignedRider: riderId, status: 'assigned' },
-      { new: true }
+      { returnDocument: 'after' }
     ).populate('assignedRider', 'name phone email')
     res.json({ success: true, data: order })
   } catch (err) {
@@ -127,10 +127,10 @@ export const assignRider = async (req, res) => {
 export const updateOrderStatus = async (req, res) => {
   try {
     const { status } = req.body
-    const order = await Order.findByIdAndUpdate(
+    const updated = await Order.findByIdAndUpdate(
       req.params.id,
       { status },
-      { new: true }
+      { returnDocument: 'after' }
     ).populate('assignedRider', 'name phone')
 
     getIO()?.to(`tenant:${updated.tenantId}`).emit('order:updated', {
@@ -139,7 +139,7 @@ export const updateOrderStatus = async (req, res) => {
       status: updated.status,
     })
 
-    res.json({ success: true, data: order })
+    res.json({ success: true, data: updated })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -153,7 +153,7 @@ export const uploadProof = async (req, res) => {
     const order = await Order.findByIdAndUpdate(
       req.params.id,
       { proofPhoto, proofRecipientName, status: 'delivered' },
-      { new: true }
+      { returnDocument: 'after' }
     )
     // Increment rider total deliveries
     if (order.assignedRider) {
@@ -227,7 +227,7 @@ export const selfAssignOrder = async (req, res) => {
     const updated = await Order.findByIdAndUpdate(
       req.params.id,
       { assignedRider: req.rider.id, status: 'assigned' },
-      { new: true }
+      { returnDocument: 'after' }
     ).populate('assignedRider', 'name phone')
 
     getIO()?.to(`tenant:${updated.tenantId}`).emit('order:updated', {
@@ -257,7 +257,7 @@ export const markPaymentCollected = async (req, res) => {
     const updated = await Order.findByIdAndUpdate(
       req.params.id,
       { paymentCollected: true, paymentCollectedAt: new Date() },
-      { new: true }
+      { returnDocument: 'after' }
     )
 
     // Notify admin via socket

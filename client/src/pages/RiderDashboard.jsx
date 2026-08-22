@@ -29,8 +29,8 @@ const DELIVERY_TYPE_LABELS = {
 }
 
 const NEXT_ACTION = {
-  assigned: { label: '✅ Accept Delivery', next: 'accepted', btn: 'rd-btn-orange' },
-  accepted: { label: '📦 Mark as Picked Up', next: 'picked-up', btn: 'rd-btn-orange' },
+  assigned:    { label: '✅ Confirm Acceptance', next: 'accepted',   btn: 'rd-btn-orange' },
+  accepted:    { label: '📦 Mark as Picked Up',  next: 'picked-up',  btn: 'rd-btn-orange' },
   'picked-up': { label: '🚀 Mark as In Transit', next: 'in-transit', btn: 'rd-btn-blue' },
 }
 
@@ -128,10 +128,14 @@ export default function RiderDashboard() {
     setAcceptLoading(orderId)
     try {
       await selfAssignOrder(orderId)
+      // Remove from available immediately so rider can't double-click
+      setAvailableOrders(prev => prev.filter(o => o._id !== orderId))
       await loadAll()
       setSelectedOrder(null)
       setActiveTab('active')
-    } catch (e) { alert(e.response?.data?.error || 'Failed to accept order.') }
+    } catch (e) { 
+      alert(e.response?.data?.error || 'Failed to accept order. It may have been taken by another rider.')
+    }
     finally { setAcceptLoading(null) }
   }
 

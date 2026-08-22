@@ -61,7 +61,7 @@ export const getRiderMe = async (req, res) => {
 export const updateRiderStatus = async (req, res) => {
   try {
     const { status } = req.body
-    const rider = await Rider.findByIdAndUpdate(req.params.id, { status }, { new: true }).select('-password')
+    const rider = await Rider.findByIdAndUpdate(req.params.id, { status }, { returnDocument: 'after' }).select('-password')
     res.json({ success: true, data: rider })
   } catch (err) {
     res.status(500).json({ error: err.message })
@@ -84,7 +84,7 @@ export const toggleRiderOnline = async (req, res) => {
     const rider = await Rider.findByIdAndUpdate(
       req.rider.id,
       { isOnline, lastSeenAt: new Date() },
-      { new: true }
+      { returnDocument: 'after' }
     ).select('-password')
     res.json({ success: true, data: rider })
   } catch (err) {

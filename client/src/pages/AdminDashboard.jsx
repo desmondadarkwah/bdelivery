@@ -7,7 +7,8 @@ import {
   createRider, updateRiderStatus, deleteRider,
   assignRider, updateOrderStatus,
   fetchSettings, updateSettings, updateTenantMe, changeAdminPassword,
-  fetchAllCustomers, deleteCustomer, fetchTenantPlanInfo
+  fetchAllCustomers, deleteCustomer, fetchTenantPlanInfo,
+  markPaymentCollected,
 } from '../utils/api'
 import { useSocket } from '../context/SocketContext'
 import NotificationBell from '../components/NotificationBell'
@@ -625,6 +626,7 @@ export default function AdminDashboard() {
                       { label: 'Completed', value: stats?.completed || 0, icon: '✅', color: '#22c55e' },
                       { label: 'Cancelled', value: stats?.cancelled || 0, icon: '❌', color: '#ef4444' },
                       { label: 'Revenue', value: `GHS ${stats?.revenue || 0}`, icon: '💰', color: '#a78bfa' },
+                      { label: 'Cash Pending', value: orders.filter(o => o.status === 'delivered' && o.paymentMethod === 'cash' && !o.paymentCollected).length, icon: '💵', color: '#f59e0b' },
                       { label: 'Riders', value: riders.filter(r => r.status === 'active').length, icon: '🏍️', color: '#38bdf8' },
                       { label: 'Customers', value: customers.length, icon: '👥', color: '#ec4899' },
                     ].map(s => (
@@ -679,7 +681,7 @@ export default function AdminDashboard() {
               </div>
               <div className="adm-table-wrap">
                 <table className="adm-table">
-                  <thead><tr><th>Order ID</th><th>Customer</th><th>Recipient</th><th>Route</th><th>Type</th><th>Rider</th><th>Status</th><th>Fee</th><th></th></tr></thead>
+                  <thead><tr><th>Order ID</th><th>Customer</th><th>Recipient</th><th>Route</th><th>Type</th><th>Rider</th><th>Status</th><th>Payment</th><th>Fee</th><th></th></tr></thead>
                   <tbody>
                     {orders.map(o => (
                       <tr key={o._id}>
@@ -690,6 +692,16 @@ export default function AdminDashboard() {
                         <td><span style={{ fontSize: 11, color: 'rgba(240,244,255,0.5)' }}>{DELIVERY_TYPE_LABELS[o.deliveryType]}</span></td>
                         <td><span style={{ fontSize: 12, color: o.assignedRider ? '#86efac' : 'rgba(240,244,255,0.25)' }}>{o.assignedRider?.name || 'Unassigned'}</span></td>
                         <td><StatusBadge status={o.status} /></td>
+                        <td>
+                          {o.paymentMethod === 'mobile-money'
+                            ? <span style={{ fontSize:11, color:'#93c5fd' }}>📱 MoMo</span>
+                            : o.paymentCollected
+                            ? <span style={{ fontSize:11, color:'#86efac' }}>✅ Collected</span>
+                            : o.status === 'delivered'
+                            ? <span style={{ fontSize:11, color:'#fca5a5' }}>⚠️ Pending</span>
+                            : <span style={{ fontSize:11, color:'rgba(240,244,255,0.3)' }}>💵 Cash</span>
+                          }
+                        </td>
                         <td style={{ color: brandColor, fontWeight: 600 }}>GHS {o.deliveryFee}</td>
                         <td><button className="adm-btn-sm adm-btn-orange" onClick={() => setSelectedOrder(o)}>Manage</button></td>
                       </tr>
@@ -888,7 +900,20 @@ export default function AdminDashboard() {
                   <div className="adm-modal-item"><div className="adm-modal-item-label">Drop-off</div><div className="adm-modal-item-value">{selectedOrder.dropoffLocation}</div></div>
                   <div className="adm-modal-item"><div className="adm-modal-item-label">Type</div><div className="adm-modal-item-value">{DELIVERY_TYPE_LABELS[selectedOrder.deliveryType]}</div></div>
                   <div className="adm-modal-item"><div className="adm-modal-item-label">Fee</div><div className="adm-modal-item-value" style={{ color: brandColor }}>GHS {selectedOrder.deliveryFee}</div></div>
-                  <div className="adm-modal-item"><div className="adm-modal-item-label">Payment</div><div className="adm-modal-item-value" style={{ textTransform: 'capitalize' }}>{selectedOrder.paymentMethod?.replace('-', ' ')}</div></div>
+                  <div className="adm-modal-item"><div className="adm-modal-item-label">Payment Method</div><div className="adm-modal-item-value" style={{ textTransform: 'capitalize' }}>{selectedOrder.paymentMethod?.replace('-', ' ')}</div></div>
+                  <div className="adm-modal-item">
+                    <div className="adm-modal-item-label">Payment Status</div>
+                    <div className="adm-modal-item-value">
+                      {selectedOrder.paymentMethod === 'mobile-money'
+                        ? <span style={{ color:'#93c5fd' }}>📱 Mobile Money</span>
+                        : selectedOrder.paymentCollected
+                        ? <span style={{ color:'#86efac' }}>✅ Cash Collected</span>
+                        : selectedOrder.status === 'delivered'
+                        ? <span style={{ color:'#fca5a5' }}>⚠️ Cash Not Collected Yet</span>
+                        : <span style={{ color:'rgba(240,244,255,0.35)' }}>💵 Cash on Delivery</span>
+                      }
+                    </div>
+                  </div>
                   <div className="adm-modal-item"><div className="adm-modal-item-label">Booked</div><div className="adm-modal-item-value">{new Date(selectedOrder.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</div></div>
                   {selectedOrder.distance > 0 && <div className="adm-modal-item"><div className="adm-modal-item-label">Distance</div><div className="adm-modal-item-value">{selectedOrder.distance} km</div></div>}
                   {selectedOrder.deliveryType === 'scheduled' && (
