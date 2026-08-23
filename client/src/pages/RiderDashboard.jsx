@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useRiderAuth } from '../context/RiderAuthContext'
 import { useTenant } from '../context/TenantContext'
-import { getRiderOrders, updateOrderStatus, uploadProof, getRiderMe, getAvailableOrders, selfAssignOrder, markPaymentCollected } from '../utils/api'
+import { getRiderOrders, updateOrderStatus, uploadProof, getRiderMe, getAvailableOrders, selfAssignOrder, markPaymentCollected, getRiderEarnings } from '../utils/api'
 import RiderMap from '../components/RiderMap'
 import { useSocket } from '../context/SocketContext'
 import { toggleRiderOnline } from '../utils/api'
+import { TrendingUp, Package, MapPin, Clock, DollarSign, Star, Navigation } from 'lucide-react'
 
 const STATUS_LABELS = {
   received: 'Order Received', assigned: 'Assigned to You',
@@ -25,13 +26,13 @@ const STATUS_COLORS = {
 
 const DELIVERY_TYPE_LABELS = {
   standard: 'Standard', 'same-day': 'Same-Day',
-  express: 'Express 🚀', scheduled: 'Scheduled 📅',
+  express: 'Express', scheduled: 'Scheduled',
 }
 
 const NEXT_ACTION = {
-  assigned:    { label: '✅ Confirm Acceptance', next: 'accepted',   btn: 'rd-btn-orange' },
-  accepted:    { label: '📦 Mark as Picked Up',  next: 'picked-up',  btn: 'rd-btn-orange' },
-  'picked-up': { label: '🚀 Mark as In Transit', next: 'in-transit', btn: 'rd-btn-blue' },
+  assigned:    { label: 'Confirm Acceptance', next: 'accepted',   btn: 'rd-btn-orange' },
+  accepted:    { label: 'Mark as Picked Up',  next: 'picked-up',  btn: 'rd-btn-orange' },
+  'picked-up': { label: 'Mark as In Transit', next: 'in-transit', btn: 'rd-btn-blue' },
 }
 
 export default function RiderDashboard() {
@@ -59,6 +60,7 @@ export default function RiderDashboard() {
   const { socket } = useSocket()
   const [isOnline, setIsOnline] = useState(false)
   const [togglingOnline, setTogglingOnline] = useState(false)
+  const [earnings, setEarnings] = useState(null)
 
   useEffect(() => {
     loadAll()
@@ -95,11 +97,11 @@ export default function RiderDashboard() {
 
   const loadAll = async () => {
     try {
-      const [o, r, a] = await Promise.all([getRiderOrders(), getRiderMe(), getAvailableOrders()])
+      const [o, r, a, e] = await Promise.all([getRiderOrders(), getRiderMe(), getAvailableOrders(), getRiderEarnings()])
       setOrders(o)
       setRiderInfo(r)
       setAvailableOrders(a)
-      // Restore online status from server
+      setEarnings(e)
       setIsOnline(r?.isOnline || false)
     } catch (e) { console.error(e) }
     finally { setLoading(false) }
@@ -310,7 +312,7 @@ export default function RiderDashboard() {
         <main className="rd-main">
           {urgentOrders.length > 0 && (
             <div className="rd-urgent">
-              <div className="rd-urgent-icon">🚨</div>
+              <div style={{ width:8, height:8, borderRadius:'50%', background:'#ef4444', flexShrink:0 }} />
               <div>
                 <div className="rd-urgent-text">{urgentOrders.length} Express order{urgentOrders.length > 1 ? 's' : ''} available — needs immediate pickup!</div>
                 <div className="rd-urgent-sub">Express orders are time-sensitive — tap Available Orders to accept</div>
@@ -328,37 +330,79 @@ export default function RiderDashboard() {
               <div className="rd-stat-label">Active</div>
             </div>
             <div className="rd-stat">
-              <div className="rd-stat-num">{completedOrders.length}</div>
-              <div className="rd-stat-label">Today</div>
-            </div>
-            <div className="rd-stat">
               <div className="rd-stat-num">{riderInfo?.totalDeliveries || 0}</div>
               <div className="rd-stat-label">All Time</div>
+            </div>
+            <div className="rd-stat">
+              <div className="rd-stat-num" style={{ fontSize:16 }}>GHS {earnings?.monthEarnings || 0}</div>
+              <div className="rd-stat-label">This Month</div>
             </div>
           </div>
 
           <div className="rd-tabs">
             <button className={`rd-tab new-tab${activeTab === 'available' ? ' active' : ''}`} onClick={() => setActiveTab('available')}>
-              🟢 Available {availableOrders.length > 0 && `(${availableOrders.length})`}
+              Available {availableOrders.length > 0 && `(${availableOrders.length})`}
             </button>
             <button className={`rd-tab${activeTab === 'active' ? ' active' : ''}`} onClick={() => setActiveTab('active')}>
               Active {activeOrders.length > 0 && `(${activeOrders.length})`}
             </button>
             <button className={`rd-tab${activeTab === 'completed' ? ' active' : ''}`} onClick={() => setActiveTab('completed')}>
-              Completed {completedOrders.length > 0 && `(${completedOrders.length})`}
+              Completed
+            </button>
+            <button className={`rd-tab${activeTab === 'earnings' ? ' active' : ''}`} onClick={() => setActiveTab('earnings')}>
+              Earnings
             </button>
           </div>
 
           {loading ? (
-            <div className="rd-empty"><div className="rd-empty-icon">⏳</div><div className="rd-empty-text">Loading...</div></div>
+            <div className="rd-empty"><div className="rd-empty-text">Loading...</div></div>
+          ) : activeTab === 'earnings' ? (
+            <div>
+              {/* Earnings Summary */}
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:20 }}>
+                {[
+                  { label:'Total Earnings',  value:`GHS ${earnings?.totalEarnings || 0}`,  sub:`${earnings?.totalDeliveries || 0} deliveries` },
+                  { label:'This Month',      value:`GHS ${earnings?.monthEarnings || 0}`,  sub:`${earnings?.monthDeliveries || 0} deliveries` },
+                  { label:'This Week',       value:`GHS ${earnings?.weekEarnings || 0}`,   sub:`${earnings?.weekDeliveries || 0} deliveries` },
+                  { label:'Avg per Delivery',value:`GHS ${earnings?.totalDeliveries ? Math.round(earnings.totalEarnings / earnings.totalDeliveries) : 0}`, sub:'per completed order' },
+                ].map(s => (
+                  <div key={s.label} style={{ background:'rgba(255,255,255,0.03)', border:'1px solid rgba(255,255,255,0.07)', borderRadius:14, padding:'16px 14px' }}>
+                    <div style={{ fontSize:10, color:'rgba(240,244,255,0.3)', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:6 }}>{s.label}</div>
+                    <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:800, fontSize:20, color: brandColor, marginBottom:3 }}>{s.value}</div>
+                    <div style={{ fontSize:11, color:'rgba(240,244,255,0.3)' }}>{s.sub}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Recent deliveries */}
+              <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:14, color:'#fff', marginBottom:12 }}>Recent Deliveries</div>
+              {earnings?.recentOrders?.length === 0 ? (
+                <div className="rd-empty"><div className="rd-empty-text">No completed deliveries yet.</div></div>
+              ) : (
+                earnings?.recentOrders?.map(o => (
+                  <div key={o._id} style={{ background:'rgba(255,255,255,0.03)', border:'1px solid rgba(255,255,255,0.07)', borderRadius:12, padding:'14px 16px', marginBottom:8, display:'flex', alignItems:'center', justifyContent:'space-between', gap:12 }}>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:14, color: brandColor, marginBottom:4 }}>{o.orderID}</div>
+                      <div style={{ fontSize:12, color:'rgba(240,244,255,0.5)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{o.pickupLocation} → {o.dropoffLocation}</div>
+                      <div style={{ fontSize:11, color:'rgba(240,244,255,0.25)', marginTop:3 }}>{new Date(o.createdAt).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}</div>
+                    </div>
+                    <div style={{ textAlign:'right', flexShrink:0 }}>
+                      <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:16, color:'#22c55e' }}>GHS {o.deliveryFee}</div>
+                      <div style={{ fontSize:11, color: o.paymentCollected ? '#86efac' : 'rgba(240,244,255,0.25)', marginTop:3 }}>
+                        {o.paymentMethod === 'mobile-money' ? 'Mobile Money' : o.paymentCollected ? 'Cash Collected' : 'Cash Pending'}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           ) : activeTab === 'available' ? (
             availableOrders.length === 0 ? (
               <div className="rd-empty">
-                <div className="rd-empty-icon">{isOnline ? '🏍️' : '😴'}</div>
                 <div className="rd-empty-text">
                   {isOnline
-                    ? 'No available orders right now.\nNew orders will appear here automatically.'
-                    : 'You are currently offline.\nGo online to start receiving delivery requests.'
+                    ? 'No available orders right now. New orders will appear here automatically.'
+                    : 'You are currently offline. Go online to start receiving delivery requests.'
                   }
                 </div>
                 {!isOnline && (
@@ -379,8 +423,8 @@ export default function RiderDashboard() {
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
                         {isExpress
-                          ? <span className="rd-express-badge">🚀 EXPRESS</span>
-                          : <span className="rd-new-badge">🟢 NEW</span>
+                          ? <span className="rd-express-badge">EXPRESS</span>
+                          : <span className="rd-new-badge">NEW</span>
                         }
                         <span style={{ fontSize: 11, color: brandColor, fontWeight: 700 }}>GHS {order.deliveryFee}</span>
                       </div>
@@ -406,7 +450,7 @@ export default function RiderDashboard() {
                       onClick={() => handleAcceptOrder(order._id)}
                       disabled={acceptLoading === order._id}
                     >
-                      {acceptLoading === order._id ? 'Accepting...' : isExpress ? '🚀 Accept Express Delivery' : '✅ Accept This Delivery'}
+                      {acceptLoading === order._id ? 'Accepting...' : isExpress ? 'Accept Express Delivery' : 'Accept This Delivery'}
                     </button>
                   </div>
                 )
@@ -414,7 +458,6 @@ export default function RiderDashboard() {
             )
           ) : displayOrders.length === 0 ? (
             <div className="rd-empty">
-              <div className="rd-empty-icon">{activeTab === 'active' ? '📦' : '🎉'}</div>
               <div className="rd-empty-text">{activeTab === 'active' ? 'No active deliveries.' : 'No completed deliveries yet.'}</div>
             </div>
           ) : (
@@ -475,11 +518,11 @@ export default function RiderDashboard() {
                 <div className="rd-section-title">Route & Navigation</div>
                 <div className="rd-info-grid" style={{ marginBottom: 12 }}>
                   <div className="rd-info-item">
-                    <div className="rd-info-label">📍 Pickup</div>
+                    <div className="rd-info-label">Pickup</div>
                     <div className="rd-info-value">{selectedOrder.pickupLocation}</div>
                   </div>
                   <div className="rd-info-item">
-                    <div className="rd-info-label">🎯 Drop-off</div>
+                    <div className="rd-info-label">Drop-off</div>
                     <div className="rd-info-value">{selectedOrder.dropoffLocation}</div>
                   </div>
                 </div>
@@ -490,7 +533,7 @@ export default function RiderDashboard() {
                   dropoffCoords={selectedOrder.dropoffCoords}
                 />
                 <a href={`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(selectedOrder.pickupLocation + ' Ghana')}&destination=${encodeURIComponent(selectedOrder.dropoffLocation + ' Ghana')}`} target="_blank" rel="noreferrer" className="rd-maps-btn" style={{ marginTop: 10 }}>
-                  🗺️ Open Google Maps Navigation
+                  Open in Google Maps
                 </a>
               </div>
 
@@ -503,7 +546,7 @@ export default function RiderDashboard() {
                       <div className="rd-contact-name">{selectedOrder.customerName}</div>
                       <div className="rd-contact-phone">{selectedOrder.customerPhone}</div>
                     </div>
-                    <a href={`tel:${selectedOrder.customerPhone}`} className="rd-call-btn">📞 Call</a>
+                    <a href={`tel:${selectedOrder.customerPhone}`} className="rd-call-btn">Call</a>
                   </div>
                   <div className="rd-contact-card">
                     <div>
@@ -511,7 +554,7 @@ export default function RiderDashboard() {
                       <div className="rd-contact-name">{selectedOrder.recipientName}</div>
                       <div className="rd-contact-phone">{selectedOrder.recipientPhone}</div>
                     </div>
-                    <a href={`tel:${selectedOrder.recipientPhone}`} className="rd-call-btn">📞 Call</a>
+                    <a href={`tel:${selectedOrder.recipientPhone}`} className="rd-call-btn">Call</a>
                   </div>
                 </div>
               </div>
@@ -558,22 +601,22 @@ export default function RiderDashboard() {
 
               {selectedOrder.status === 'in-transit' && (
                 <div className="rd-proof-section">
-                  <div className="rd-proof-title">📸 Confirm Delivery</div>
+                  <div className="rd-proof-title">Confirm Delivery</div>
                   <input className="rd-proof-input" placeholder="Who received the package? (Full name)" value={proofName} onChange={e => setProofName(e.target.value)} />
                   <div className={`rd-file-zone${proofPhoto ? ' has-file' : ''}`} onClick={() => document.getElementById('proof-img').click()}>
-                    {proofPhoto ? `✅ ${proofPhoto.name}` : '📷 Upload delivery photo (optional but recommended)'}
+                    {proofPhoto ? `${proofPhoto.name}` : 'Upload delivery photo (optional but recommended)'}
                     <input id="proof-img" type="file" accept="image/*" style={{ display: 'none' }} onChange={e => setProofPhoto(e.target.files[0])} />
                   </div>
                   {proofError && <div className="rd-proof-error">⚠️ {proofError}</div>}
                   <button className="rd-btn rd-btn-green" onClick={handleProofSubmit} disabled={proofLoading}>
-                    {proofLoading ? 'Confirming...' : '✅ Mark as Delivered'}
+                    {proofLoading ? 'Confirming...' : 'Mark as Delivered'}
                   </button>
                 </div>
               )}
 
               {selectedOrder.status === 'delivered' && (
                 <div className="rd-delivered-box">
-                  <div className="rd-delivered-icon">🎉</div>
+                  <div className="rd-delivered-icon"></div>
                   <div className="rd-delivered-text">Delivery Completed!</div>
                   {selectedOrder.proofRecipientName && (
                     <div className="rd-delivered-sub">Received by: {selectedOrder.proofRecipientName}</div>
@@ -601,7 +644,7 @@ export default function RiderDashboard() {
                           }}
                           style={{ width: '100%', padding: '11px', background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: 10, color: '#86efac', fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s' }}
                         >
-                          💵 Mark Cash Collected — GHS {selectedOrder.deliveryFee}
+                          Mark Cash Collected — GHS {selectedOrder.deliveryFee}
                         </button>
                       )}
                     </div>
@@ -609,7 +652,7 @@ export default function RiderDashboard() {
 
                   {selectedOrder.paymentMethod === 'mobile-money' && (
                     <div style={{ marginTop: 16, padding: '12px 14px', background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: 10, fontSize: 12, color: '#93c5fd', textAlign: 'center' }}>
-                      📱 Mobile Money — Payment handled online
+                      Mobile Money — Payment handled online
                     </div>
                   )}
                 </div>

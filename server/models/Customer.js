@@ -7,6 +7,11 @@ const customerSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true, lowercase: true, trim: true },
   phone: { type: String, default: '' },
   password: { type: String, required: true },
+  savedAddresses: [{
+    label: { type: String, required: true }, // e.g. "Home", "Office"
+    address: { type: String, required: true },
+    coords: { lat: Number, lng: Number },
+  }],
 }, { timestamps: true })
 
 customerSchema.pre('save', async function () {

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useCustomerAuth } from '../context/CustomerAuthContext'
 import { useTenant } from '../context/TenantContext'
-import { fetchCustomerOrders, updateCustomerProfile, changeCustomerPassword } from '../utils/api'
+import { fetchCustomerOrders, updateCustomerProfile, changeCustomerPassword, rateDelivery, cancelOrder, getSavedAddresses, addSavedAddress, deleteSavedAddress } from '../utils/api'
 
 const STATUS_LABELS = {
   received: 'Order Received', assigned: 'Rider Assigned',
@@ -18,6 +18,175 @@ const STATUS_COLORS = {
   'in-transit':{ bg:'rgba(59,130,246,0.15)',  color:'#93c5fd' },
   delivered:   { bg:'rgba(34,197,94,0.15)',   color:'#86efac' },
   cancelled:   { bg:'rgba(239,68,68,0.15)',   color:'#fca5a5' },
+}
+
+function AddressesTab({ brandColor, customer }) {
+  const [addresses, setAddresses] = useState([])
+  const [loading, setLoading]     = useState(true)
+  const [form, setForm]           = useState({ label:'', address:'' })
+  const [saving, setSaving]       = useState(false)
+  const [error, setError]         = useState('')
+  const [open, setOpen]           = useState(false)
+
+  useEffect(() => {
+    getSavedAddresses()
+      .then(setAddresses)
+      .catch(console.error)
+      .finally(() => setLoading(false))
+  }, [])
+
+  const handleAdd = async () => {
+    if (!form.label.trim() || !form.address.trim()) { setError('Label and address are required.'); return }
+    setSaving(true); setError('')
+    try {
+      const updated = await addSavedAddress(form)
+      setAddresses(updated)
+      setForm({ label:'', address:'' })
+      setOpen(false)
+    } catch(e) { setError(e.response?.data?.error || 'Failed to save address.') }
+    finally { setSaving(false) }
+  }
+
+  const handleDelete = async (id) => {
+    if (!confirm('Remove this address?')) return
+    try {
+      const updated = await deleteSavedAddress(id)
+      setAddresses(updated)
+    } catch(e) { alert('Failed to remove address.') }
+  }
+
+  const LABEL_SUGGESTIONS = ['Home', 'Office', 'School', 'Gym', 'Other']
+
+  return (
+    <div>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
+        <div style={{ fontSize:13, color:'rgba(240,244,255,0.4)' }}>{addresses.length}/5 saved addresses</div>
+        {addresses.length < 5 && (
+          <button onClick={() => setOpen(!open)} style={{ padding:'8px 16px', background: brandColor, color:'#fff', border:'none', borderRadius:8, fontSize:13, fontWeight:600, cursor:'pointer' }}>
+            + Add Address
+          </button>
+        )}
+      </div>
+
+      {open && (
+        <div style={{ background:'rgba(255,255,255,0.03)', border:'1px solid rgba(255,255,255,0.08)', borderRadius:14, padding:20, marginBottom:16 }}>
+          <div style={{ fontSize:13, fontWeight:600, color:'#fff', marginBottom:14 }}>New Saved Address</div>
+          <div style={{ marginBottom:12 }}>
+            <div style={{ fontSize:12, color:'rgba(240,244,255,0.4)', marginBottom:8 }}>Label</div>
+            <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:8 }}>
+              {LABEL_SUGGESTIONS.map(l => (
+                <button key={l} onClick={() => setForm({...form, label:l})}
+                  style={{ padding:'5px 12px', borderRadius:100, fontSize:12, cursor:'pointer', border:`1px solid ${form.label === l ? brandColor : 'rgba(255,255,255,0.1)'}`, background: form.label === l ? `${brandColor}20` : 'transparent', color: form.label === l ? brandColor : 'rgba(240,244,255,0.5)', transition:'all 0.2s' }}>
+                  {l}
+                </button>
+              ))}
+            </div>
+            <input className="ca-input" placeholder="Or type a custom label..." value={form.label} onChange={e => setForm({...form,label:e.target.value})} />
+          </div>
+          <div style={{ marginBottom:12 }}>
+            <div style={{ fontSize:12, color:'rgba(240,244,255,0.4)', marginBottom:6 }}>Address</div>
+            <input className="ca-input" placeholder="e.g. East Legon, Accra" value={form.address} onChange={e => setForm({...form,address:e.target.value})} />
+          </div>
+          {error && <div style={{ fontSize:12, color:'#fca5a5', marginBottom:10 }}>✕ {error}</div>}
+          <div style={{ display:'flex', gap:8 }}>
+            <button onClick={handleAdd} disabled={saving} style={{ padding:'10px 20px', background: brandColor, color:'#fff', border:'none', borderRadius:8, fontSize:13, fontWeight:600, cursor:'pointer', opacity: saving ? 0.6 : 1 }}>
+              {saving ? 'Saving...' : 'Save Address'}
+            </button>
+            <button onClick={() => { setOpen(false); setError('') }} style={{ padding:'10px 16px', background:'transparent', color:'rgba(240,244,255,0.35)', border:'1px solid rgba(255,255,255,0.08)', borderRadius:8, fontSize:13, cursor:'pointer' }}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="ca-empty"><div className="ca-empty-text">Loading addresses...</div></div>
+      ) : addresses.length === 0 ? (
+        <div className="ca-empty">
+          <div className="ca-empty-icon" style={{ fontSize:32, marginBottom:10 }}>📍</div>
+          <div className="ca-empty-text" style={{ marginBottom:0 }}>No saved addresses yet. Add your home or office for quick booking.</div>
+        </div>
+      ) : (
+        addresses.map(addr => (
+          <div key={addr._id} style={{ background:'rgba(255,255,255,0.03)', border:'1px solid rgba(255,255,255,0.07)', borderRadius:12, padding:'14px 16px', marginBottom:10, display:'flex', alignItems:'center', gap:14 }}>
+            <div style={{ width:36, height:36, borderRadius:10, background:`${brandColor}18`, border:`1px solid ${brandColor}30`, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={brandColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
+              </svg>
+            </div>
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ fontSize:13, fontWeight:600, color:'#fff', marginBottom:2 }}>{addr.label}</div>
+              <div style={{ fontSize:12, color:'rgba(240,244,255,0.4)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{addr.address}</div>
+            </div>
+            <button onClick={() => handleDelete(addr._id)} style={{ padding:'6px 12px', background:'rgba(239,68,68,0.1)', border:'1px solid rgba(239,68,68,0.2)', borderRadius:8, color:'#fca5a5', fontSize:12, cursor:'pointer', flexShrink:0, transition:'all 0.2s' }}>
+              Remove
+            </button>
+          </div>
+        ))
+      )}
+    </div>
+  )
+}
+
+function RatingWidget({ orderId, onRated, brandColor }) {
+  const [stars, setStars]     = useState(0)
+  const [hover, setHover]     = useState(0)
+  const [comment, setComment] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError]     = useState('')
+  const [open, setOpen]       = useState(false)
+
+  const submit = async () => {
+    if (!stars) { setError('Please select a star rating.'); return }
+    setLoading(true); setError('')
+    try {
+      await rateDelivery(orderId, { stars, comment })
+      onRated()
+      setOpen(false)
+    } catch(e) { setError(e.response?.data?.error || 'Failed to submit rating.') }
+    finally { setLoading(false) }
+  }
+
+  if (!open) return (
+    <button
+      onClick={() => setOpen(true)}
+      style={{ padding:'6px 14px', background:'rgba(245,158,11,0.12)', border:'1px solid rgba(245,158,11,0.3)', borderRadius:8, color:'#fcd34d', fontSize:12, fontWeight:600, cursor:'pointer' }}
+    >
+      ⭐ Rate this Delivery
+    </button>
+  )
+
+  return (
+    <div style={{ background:'rgba(255,255,255,0.03)', border:'1px solid rgba(255,255,255,0.08)', borderRadius:12, padding:16, marginTop:8 }}>
+      <div style={{ fontSize:13, fontWeight:600, color:'#fff', marginBottom:12 }}>How was your delivery?</div>
+      <div style={{ display:'flex', gap:6, marginBottom:12 }}>
+        {[1,2,3,4,5].map(s => (
+          <span
+            key={s}
+            onClick={() => setStars(s)}
+            onMouseEnter={() => setHover(s)}
+            onMouseLeave={() => setHover(0)}
+            style={{ fontSize:28, cursor:'pointer', color: s <= (hover || stars) ? '#f59e0b' : 'rgba(255,255,255,0.15)', transition:'color 0.15s' }}
+          >★</span>
+        ))}
+      </div>
+      <textarea
+        placeholder="Leave a comment (optional)..."
+        value={comment}
+        onChange={e => setComment(e.target.value)}
+        style={{ width:'100%', background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.09)', borderRadius:8, padding:'10px 12px', fontSize:13, color:'#fff', outline:'none', resize:'none', height:70, fontFamily:'Inter,sans-serif', marginBottom:10, boxSizing:'border-box' }}
+      />
+      {error && <div style={{ fontSize:12, color:'#fca5a5', marginBottom:8 }}>✕ {error}</div>}
+      <div style={{ display:'flex', gap:8 }}>
+        <button onClick={submit} disabled={loading} style={{ padding:'9px 20px', background: brandColor, color:'#fff', border:'none', borderRadius:8, fontSize:13, fontWeight:600, cursor:'pointer', opacity: loading ? 0.6 : 1 }}>
+          {loading ? 'Submitting...' : 'Submit Rating'}
+        </button>
+        <button onClick={() => setOpen(false)} style={{ padding:'9px 16px', background:'transparent', color:'rgba(240,244,255,0.35)', border:'1px solid rgba(255,255,255,0.08)', borderRadius:8, fontSize:13, cursor:'pointer' }}>
+          Cancel
+        </button>
+      </div>
+    </div>
+  )
 }
 
 export default function CustomerAccount() {
@@ -128,6 +297,8 @@ export default function CustomerAccount() {
         .ca-order-meta { font-size: 12px; color: rgba(240,244,255,0.35); }
         .ca-track-btn { padding: 6px 14px; background: rgba(249,115,22,0.15); border: 1px solid rgba(249,115,22,0.3); border-radius: 8px; color: var(--brand); font-size: 12px; font-weight: 600; text-decoration: none; transition: all 0.2s; }
         .ca-track-btn:hover { background: var(--brand); color: #fff; }
+        .ca-cancel-btn { padding: 6px 14px; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.25); border-radius: 8px; color: #fca5a5; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+        .ca-cancel-btn:hover { background: #ef4444; color: #fff; border-color: #ef4444; }
         .ca-empty { padding: 48px 0; text-align: center; color: rgba(240,244,255,0.25); }
         .ca-empty-icon { font-size: 40px; margin-bottom: 12px; }
         .ca-empty-text { font-size: 14px; margin-bottom: 20px; }
@@ -176,6 +347,7 @@ export default function CustomerAccount() {
 
           <div className="ca-tabs">
             <button className={`ca-tab${activeTab === 'orders' ? ' active' : ''}`} onClick={() => setActiveTab('orders')}>My Orders</button>
+            <button className={`ca-tab${activeTab === 'addresses' ? ' active' : ''}`} onClick={() => setActiveTab('addresses')}>Saved Addresses</button>
             <button className={`ca-tab${activeTab === 'profile' ? ' active' : ''}`} onClick={() => setActiveTab('profile')}>Profile</button>
             <button className={`ca-tab${activeTab === 'security' ? ' active' : ''}`} onClick={() => setActiveTab('security')}>Security</button>
           </div>
@@ -208,12 +380,63 @@ export default function CustomerAccount() {
                     </div>
                     <div className="ca-order-footer">
                       <div className="ca-order-meta">GHS {order.deliveryFee} · {order.paymentMethod?.replace('-',' ')}{order.assignedRider && ` · Rider: ${order.assignedRider.name}`}</div>
-                      <a href={`/track/${order.orderID}`} className="ca-track-btn">🔍 Track Order</a>
+                      <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+                        {['received','assigned','accepted'].includes(order.status) && (
+                          <button
+                            className="ca-cancel-btn"
+                            onClick={async () => {
+                              if (!confirm('Cancel this order? This cannot be undone.')) return
+                              try {
+                                await cancelOrder(order._id)
+                                fetchCustomerOrders().then(setOrders)
+                              } catch(e) {
+                                alert(e.response?.data?.error || 'Failed to cancel order.')
+                              }
+                            }}
+                          >
+                            Cancel Order
+                          </button>
+                        )}
+                        <a href={`/track/${order.orderID}`} className="ca-track-btn">Track Order</a>
+                        {order.status === 'delivered' && (
+                          <a
+                            href={`/book?reorder=${order._id}&pickup=${encodeURIComponent(order.pickupLocation)}&dropoff=${encodeURIComponent(order.dropoffLocation)}&type=${order.deliveryType}`}
+                            style={{ padding:'6px 14px', background:'rgba(99,102,241,0.12)', border:'1px solid rgba(99,102,241,0.25)', borderRadius:8, color:'#a5b4fc', fontSize:12, fontWeight:600, textDecoration:'none', transition:'all 0.2s', whiteSpace:'nowrap' }}
+                          >
+                            Reorder
+                          </a>
+                        )}
+                      </div>
                     </div>
+                    {order.status === 'delivered' && (
+                      <div style={{ marginTop:12, paddingTop:12, borderTop:'1px solid rgba(255,255,255,0.06)' }}>
+                        {order.rating?.stars ? (
+                          <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+                            <div style={{ display:'flex', gap:2 }}>
+                              {[1,2,3,4,5].map(s => (
+                                <span key={s} style={{ fontSize:16, color: s <= order.rating.stars ? '#f59e0b' : 'rgba(255,255,255,0.15)' }}>★</span>
+                              ))}
+                            </div>
+                            <span style={{ fontSize:12, color:'rgba(240,244,255,0.35)' }}>You rated this delivery</span>
+                            {order.rating.comment && <span style={{ fontSize:12, color:'rgba(240,244,255,0.45)', fontStyle:'italic' }}>"{order.rating.comment}"</span>}
+                          </div>
+                        ) : (
+                          <RatingWidget
+                            orderId={order._id}
+                            brandColor={brandColor}
+                            onRated={() => fetchCustomerOrders().then(setOrders)}
+                          />
+                        )}
+                      </div>
+                    )}
                   </div>
                 )
               })
             )
+          )}
+
+          {activeTab === 'addresses' && (
+            <AddressesTab brandColor={brandColor} customer={customer} />
           )}
 
           {activeTab === 'profile' && (

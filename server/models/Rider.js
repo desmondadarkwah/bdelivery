@@ -11,6 +11,12 @@ const riderSchema = new mongoose.Schema({
   totalDeliveries: { type: Number, default: 0 },
   isOnline: { type: Boolean, default: false },
   lastSeenAt: { type: Date, default: null },
+  avgRating: { type: Number, default: 0 },
+  totalRatings: { type: Number, default: 0 },
+  totalEarnings: { type: Number, default: 0 },
+  pendingPayout: { type: Number, default: 0 },
+  totalPaidOut: { type: Number, default: 0 },
+  lastPaidOutAt: { type: Date, default: null },
 }, { timestamps: true })
 
 riderSchema.pre('save', async function () {

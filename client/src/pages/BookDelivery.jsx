@@ -96,6 +96,23 @@ export default function BookDelivery() {
     }
   }, [customer])
 
+  const [reorderInfo, setReorderInfo] = useState(null)
+
+  // Auto-fill from reorder params
+  useEffect(() => {
+    const params  = new URLSearchParams(window.location.search)
+    const pickup  = params.get('pickup')
+    const dropoff = params.get('dropoff')
+    const type    = params.get('type')
+    if (pickup || dropoff) {
+      setForm(prev => ({
+        ...prev,
+        deliveryType: type || prev.deliveryType,
+      }))
+      setReorderInfo({ pickup, dropoff })
+    }
+  }, [])
+
   const BASE_FEES = {
     standard:   tenant?.standardFee  || 30,
     'same-day': tenant?.sameDayFee   || 50,
@@ -371,6 +388,14 @@ export default function BookDelivery() {
           {/* STEP 1 */}
           {step === 1 && (
             <div className="bk-card">
+              {reorderInfo && (
+                <div style={{ background:'rgba(99,102,241,0.08)', border:'1px solid rgba(99,102,241,0.2)', borderRadius:10, padding:'12px 14px', marginBottom:20 }}>
+                  <div style={{ fontSize:11, color:'#a5b4fc', fontWeight:600, marginBottom:6, textTransform:'uppercase', letterSpacing:'0.06em' }}>Reordering Previous Delivery</div>
+                  <div style={{ fontSize:12, color:'rgba(240,244,255,0.6)', marginBottom:2 }}>From: {reorderInfo.pickup}</div>
+                  <div style={{ fontSize:12, color:'rgba(240,244,255,0.6)', marginBottom:6 }}>To: {reorderInfo.dropoff}</div>
+                  <div style={{ fontSize:11, color:'rgba(240,244,255,0.3)' }}>Fill in recipient details below, then search locations on the map in Step 2</div>
+                </div>
+              )}
               <div className="bk-section-title">👤 Sender Details</div>
               <div className="bk-row">
                 <div className="bk-field">
@@ -401,6 +426,11 @@ export default function BookDelivery() {
           {step === 2 && (
             <div className="bk-card">
               <div className="bk-section-title">📍 Locations</div>
+              {reorderInfo && (
+                <div style={{ background:'rgba(99,102,241,0.06)', border:'1px solid rgba(99,102,241,0.15)', borderRadius:10, padding:'10px 14px', marginBottom:12, fontSize:12, color:'rgba(165,180,252,0.7)', lineHeight:1.6 }}>
+                  Previous route: <strong style={{ color:'#a5b4fc' }}>{reorderInfo.pickup}</strong> → <strong style={{ color:'#a5b4fc' }}>{reorderInfo.dropoff}</strong>. Search the same locations below.
+                </div>
+              )}
               <LocationPicker
                 onPickupChange={(name, coords) => { set('pickupLocation', name); setPickupCoords(coords) }}
                 onDropoffChange={(name, coords) => { set('dropoffLocation', name); setDropoffCoords(coords) }}

@@ -6,9 +6,9 @@ import { upload } from '../middleware/uploadMiddleware.js'
 // Controllers
 import { setupSuperAdmin, loginSuperAdmin, getPlatformStats } from '../controllers/superAdminController.js'
 import { createTenant, getAllTenants, getTenantBySubdomain, updateTenant, updateTenantStatus, deleteTenant, loginTenantAdmin, getTenantMe, updateTenantMe, getTenantPlanInfo } from '../controllers/tenantController.js'
-import { createRider, loginRider, getAllRiders, getRiderMe, updateRiderStatus, deleteRider, toggleRiderOnline } from '../controllers/riderController.js'
-import { createOrder, getAllOrders, trackOrder, getRiderOrders, assignRider, updateOrderStatus, uploadProof, getStats, getAvailableOrders, selfAssignOrder, markPaymentCollected } from '../controllers/orderController.js'
-import { registerCustomer, loginCustomer, getCustomerMe, updateCustomerProfile, changeCustomerPassword, getCustomerOrders, getAllCustomers, deleteCustomer } from '../controllers/customerController.js'
+import { createRider, loginRider, getAllRiders, getRiderMe, updateRiderStatus, deleteRider, toggleRiderOnline, getRiderEarnings, markRiderPayout } from '../controllers/riderController.js'
+import { createOrder, getAllOrders, trackOrder, getRiderOrders, assignRider, updateOrderStatus, uploadProof, getStats, getAvailableOrders, selfAssignOrder, markPaymentCollected, rateDelivery, cancelOrder, getReconciliation } from '../controllers/orderController.js'
+import { registerCustomer, loginCustomer, getCustomerMe, updateCustomerProfile, changeCustomerPassword, getCustomerOrders, getAllCustomers, deleteCustomer, getSavedAddresses, addSavedAddress, deleteSavedAddress } from '../controllers/customerController.js'
 
 const router = express.Router()
 
@@ -41,13 +41,13 @@ router.put('/orders/:id/payment', protectRider, markPaymentCollected)
 // ─── RIDERS ───────────────────────────────────────────
 router.post('/riders/login', loginRider)
 router.get('/riders/me', protectRider, getRiderMe)
-router.post('/riders', protectTenant,checkRiderLimit, createRider)
+router.post('/riders', protectTenant, checkRiderLimit, createRider)
 router.get('/riders', protectTenant, getAllRiders)
 router.put('/riders/:id/status', protectTenant, updateRiderStatus)
 router.delete('/riders/:id', protectTenant, deleteRider)
 
 // ─── ORDERS ───────────────────────────────────────────
-router.post('/orders',resolveTenant, checkOrderLimit, upload.single('packageImage'), createOrder)
+router.post('/orders', resolveTenant, checkOrderLimit, upload.single('packageImage'), createOrder)
 router.get('/orders/track/:orderID', trackOrder)
 router.get('/orders/stats', protectTenant, getStats)
 router.get('/orders', protectTenant, getAllOrders)
@@ -69,6 +69,20 @@ router.get('/customers/all', protectTenant, getAllCustomers)
 router.delete('/customers/:id', protectTenant, deleteCustomer)
 
 router.put('/riders/me/online', protectRider, toggleRiderOnline)
+router.put('/orders/:id/rate', protectCustomer, rateDelivery)
 
+router.get('/riders/me/earnings', protectRider, getRiderEarnings)
+
+router.put('/orders/:id/cancel', protectCustomer, cancelOrder)
+
+
+//address info
+router.get('/customers/addresses', protectCustomer, getSavedAddresses)
+router.post('/customers/addresses', protectCustomer, addSavedAddress)
+router.delete('/customers/addresses/:id', protectCustomer, deleteSavedAddress)
+
+//route
+router.put('/riders/:id/payout', protectTenant, markRiderPayout)
+router.get('/orders/reconciliation', protectTenant, getReconciliation)
 
 export default router

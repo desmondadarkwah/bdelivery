@@ -4,13 +4,51 @@ import { useTenant } from '../context/TenantContext'
 import { trackOrder } from '../utils/api'
 
 const STATUS_STEPS = [
-  { key: 'received',    label: 'Order Received',  icon: '📋', desc: 'Your order has been placed successfully.' },
-  { key: 'assigned',    label: 'Rider Assigned',  icon: '🏍️', desc: 'A rider has been assigned to your delivery.' },
-  { key: 'accepted',    label: 'Accepted',         icon: '✅', desc: 'Your rider has accepted the delivery.' },
-  { key: 'picked-up',   label: 'Picked Up',        icon: '📦', desc: 'Your package has been picked up.' },
-  { key: 'in-transit',  label: 'In Transit',       icon: '🚀', desc: 'Your package is on the way.' },
-  { key: 'delivered',   label: 'Delivered',        icon: '🎉', desc: 'Your package has been delivered!' },
+  { key: 'received',   label: 'Order Received', desc: 'Your order has been placed successfully.' },
+  { key: 'assigned',   label: 'Rider Assigned', desc: 'A rider has been assigned to your delivery.' },
+  { key: 'accepted',   label: 'Accepted',        desc: 'Your rider has accepted the delivery.' },
+  { key: 'picked-up',  label: 'Picked Up',       desc: 'Your package has been picked up.' },
+  { key: 'in-transit', label: 'In Transit',      desc: 'Your package is on the way.' },
+  { key: 'delivered',  label: 'Delivered',       desc: 'Your package has been delivered!' },
 ]
+
+const getETA = (order) => {
+  if (!order || order.status === 'delivered' || order.status === 'cancelled') return null
+  const createdAt = new Date(order.createdAt)
+  const now = new Date()
+  const minutesElapsed = Math.floor((now - createdAt) / 60000)
+
+  const etaMinutes = {
+    standard:  240, // 4 hours
+    'same-day': 180, // 3 hours
+    express:    60,  // 1 hour
+    scheduled:  null,
+  }
+
+  if (order.deliveryType === 'scheduled') {
+    if (order.scheduledDate && order.scheduledTime) {
+      return `Scheduled for ${order.scheduledDate} at ${order.scheduledTime}`
+    }
+    return null
+  }
+
+  const totalMins = etaMinutes[order.deliveryType] || 240
+  const remainingMins = Math.max(0, totalMins - minutesElapsed)
+
+  if (order.status === 'in-transit') {
+    return `Arriving in approximately ${Math.min(remainingMins, 30)} mins`
+  }
+  if (order.status === 'picked-up') {
+    return `Estimated arrival in ${Math.min(remainingMins, 45)} mins`
+  }
+  if (remainingMins <= 0) return 'Should arrive soon'
+  if (remainingMins >= 60) {
+    const hrs = Math.floor(remainingMins / 60)
+    const mins = remainingMins % 60
+    return `Est. ${hrs}h ${mins > 0 ? mins + 'm' : ''} remaining`
+  }
+  return `Est. ${remainingMins} mins remaining`
+}
 
 export default function TrackOrder() {
   const { orderID: paramID } = useParams()
@@ -160,7 +198,7 @@ export default function TrackOrder() {
               onKeyDown={e => e.key === 'Enter' && handleSearch()}
             />
             <button className="tr-btn" onClick={() => handleSearch()} disabled={loading}>
-              {loading ? '⏳' : '🔍 Track'}
+              {loading ? 'Searching...' : 'Track'}
             </button>
           </div>
 
@@ -176,10 +214,10 @@ export default function TrackOrder() {
                     <div className="tr-order-date">Placed {new Date(order.createdAt).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})} at {new Date(order.createdAt).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}</div>
                   </div>
                   {isCancelled
-                    ? <span className="tr-status-badge" style={{ background:'rgba(239,68,68,0.15)', color:'#fca5a5' }}>❌ Cancelled</span>
+                    ? <span className="tr-status-badge" style={{ background:'rgba(239,68,68,0.15)', color:'#fca5a5' }}>Cancelled</span>
                     : order.status === 'delivered'
-                    ? <span className="tr-status-badge" style={{ background:'rgba(34,197,94,0.15)', color:'#86efac' }}>✅ Delivered</span>
-                    : <span className="tr-status-badge" style={{ background:'rgba(249,115,22,0.15)', color: brandColor }}>🔄 In Progress</span>
+                    ? <span className="tr-status-badge" style={{ background:'rgba(34,197,94,0.15)', color:'#86efac' }}>Delivered</span>
+                    : <span className="tr-status-badge" style={{ background:'rgba(249,115,22,0.15)', color: brandColor }}>In Progress</span>
                   }
                 </div>
 
@@ -215,7 +253,22 @@ export default function TrackOrder() {
                       <div className="tr-rider-name">{order.assignedRider.name}</div>
                       <div className="tr-rider-phone">{order.assignedRider.phone}</div>
                     </div>
-                    <a href={`tel:${order.assignedRider.phone}`} className="tr-call-btn">📞 Call Rider</a>
+                    <a href={`tel:${order.assignedRider.phone}`} className="tr-call-btn">Call Rider</a>
+                  </div>
+                )}
+
+                {/* ETA Banner */}
+                {!isCancelled && order.status !== 'delivered' && getETA(order) && (
+                  <div style={{ marginTop:16, padding:'14px 16px', background:`${brandColor}12`, border:`1px solid ${brandColor}30`, borderRadius:12, display:'flex', alignItems:'center', gap:12 }}>
+                    <div style={{ width:36, height:36, borderRadius:10, background:`${brandColor}20`, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={brandColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                      </svg>
+                    </div>
+                    <div>
+                      <div style={{ fontSize:11, color:'rgba(240,244,255,0.35)', marginBottom:3, textTransform:'uppercase', letterSpacing:'0.06em' }}>Estimated Arrival</div>
+                      <div style={{ fontSize:15, fontWeight:700, color: brandColor }}>{getETA(order)}</div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -223,7 +276,7 @@ export default function TrackOrder() {
               {/* Delivered */}
               {order.status === 'delivered' && (
                 <div className="tr-delivered">
-                  <div className="tr-delivered-icon">🎉</div>
+                  
                   <div className="tr-delivered-text">Package Delivered!</div>
                   {order.proofRecipientName && <div className="tr-delivered-sub">Received by: {order.proofRecipientName}</div>}
                 </div>
@@ -253,7 +306,7 @@ export default function TrackOrder() {
                         <div key={step.key} className="tr-step">
                           <div className="tr-step-left">
                             <div className={`tr-step-dot ${isDone ? 'done' : isCurrent ? 'current' : 'pending'}`}>
-                              {isDone ? '✓' : step.icon}
+                              {isDone ? '✓' : "·"}
                             </div>
                             {!isLast && <div className={`tr-step-line ${isDone ? 'done' : 'pending'}`} />}
                           </div>
@@ -269,7 +322,7 @@ export default function TrackOrder() {
               )}
 
               <div style={{ textAlign:'center', marginTop:16 }}>
-                <a href="/book" style={{ color: brandColor, fontSize:13, textDecoration:'none', fontWeight:500 }}>+ Book Another Delivery</a>
+                <a href="/book" style={{ color: brandColor, fontSize:13, textDecoration:'none', fontWeight:500 }}>Book Another Delivery</a>
               </div>
             </>
           )}

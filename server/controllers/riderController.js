@@ -91,3 +91,70 @@ export const toggleRiderOnline = async (req, res) => {
     res.status(500).json({ error: err.message })
   }
 }
+
+// GET /api/riders/me/earnings — rider gets their earnings
+export const getRiderEarnings = async (req, res) => {
+  try {
+    const Order = (await import('../models/Order.js')).default
+
+    const allDeliveries = await Order.find({
+      assignedRider: req.rider.id,
+      status: 'delivered',
+    }).sort({ createdAt: -1 })
+
+    // This week
+    const startOfWeek = new Date()
+    startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay())
+    startOfWeek.setHours(0, 0, 0, 0)
+
+    // This month
+    const startOfMonth = new Date()
+    startOfMonth.setDate(1)
+    startOfMonth.setHours(0, 0, 0, 0)
+
+    const weekDeliveries  = allDeliveries.filter(o => new Date(o.createdAt) >= startOfWeek)
+    const monthDeliveries = allDeliveries.filter(o => new Date(o.createdAt) >= startOfMonth)
+
+    const totalEarnings = allDeliveries.reduce((sum, o) => sum + (o.deliveryFee || 0), 0)
+    const weekEarnings  = weekDeliveries.reduce((sum, o) => sum + (o.deliveryFee || 0), 0)
+    const monthEarnings = monthDeliveries.reduce((sum, o) => sum + (o.deliveryFee || 0), 0)
+
+    res.json({
+      success: true,
+      data: {
+        totalEarnings,
+        weekEarnings,
+        monthEarnings,
+        totalDeliveries: allDeliveries.length,
+        weekDeliveries:  weekDeliveries.length,
+        monthDeliveries: monthDeliveries.length,
+        recentOrders: allDeliveries.slice(0, 10),
+      }
+    })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}
+
+// PUT /api/riders/:id/payout — admin marks rider payout as done
+export const markRiderPayout = async (req, res) => {
+  try {
+    const { amount } = req.body
+    const rider = await Rider.findById(req.params.id)
+    if (!rider) return res.status(404).json({ error: 'Rider not found.' })
+
+    const updated = await Rider.findByIdAndUpdate(
+      req.params.id,
+      {
+        $inc: { totalPaidOut: amount },
+        pendingPayout: 0,
+        lastPaidOutAt: new Date(),
+      },
+      { returnDocument: 'after' }
+    ).select('-password')
+
+    res.json({ success: true, data: updated })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}

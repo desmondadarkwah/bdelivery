@@ -15,10 +15,10 @@ const axiosInstance = axios.create({
 })
 
 axiosInstance.interceptors.request.use((config) => {
-  const adminToken    = localStorage.getItem('swg_admin_token')
-  const riderToken    = localStorage.getItem('swg_rider_token')
+  const adminToken = localStorage.getItem('swg_admin_token')
+  const riderToken = localStorage.getItem('swg_rider_token')
   const customerToken = localStorage.getItem('swg_customer_token')
-  const superToken    = localStorage.getItem('bdv_super_token')
+  const superToken = localStorage.getItem('bdv_super_token')
   const url = config.url || ''
 
   const subdomain = getSubdomain()
@@ -29,15 +29,20 @@ axiosInstance.interceptors.request.use((config) => {
     url.includes('/orders/rider') ||
     url.includes('/orders/available') ||
     url.includes('/self-assign') ||
-    url.includes('/proof')
+    url.includes('/proof') ||
+    url.includes('/payment') ||
+    url.includes('/earnings')
 
   const isCustomerRoute =
     url.includes('/customers/me') ||
     url.includes('/customers/orders') ||
-    url.includes('/customers/me/password')
+    url.includes('/customers/me/password') ||
+    url.includes('/rate') ||
+    url.includes('/cancel')||
+    url.includes('/customers/addresses') 
 
-  const isSuperRoute   = url.includes('/super/')
-  const isTenantRoute  = url.includes('/tenant/me')
+  const isSuperRoute = url.includes('/super/')
+  const isTenantRoute = url.includes('/tenant/me')
 
   if (isSuperRoute && superToken) {
     config.headers.Authorization = `Bearer ${superToken}`
@@ -57,7 +62,7 @@ axiosInstance.interceptors.request.use((config) => {
 axiosInstance.interceptors.response.use(
   (response) => response,
   (error) => {
-    const url    = error.config?.url || ''
+    const url = error.config?.url || ''
     const status = error.response?.status
 
     const isAuthEndpoint =
@@ -69,9 +74,9 @@ axiosInstance.interceptors.response.use(
       url.includes('/super/login')
 
     if (status === 401 && !isAuthEndpoint) {
-      const isRiderRoute    = url.includes('/riders/me') || url.includes('/orders/rider') || url.includes('/orders/available') || url.includes('/self-assign') || url.includes('/proof')
+      const isRiderRoute = url.includes('/riders/me') || url.includes('/orders/rider') || url.includes('/orders/available') || url.includes('/self-assign') || url.includes('/proof')
       const isCustomerRoute = url.includes('/customers/me') || url.includes('/customers/orders')
-      const isSuperRoute    = url.includes('/super/')
+      const isSuperRoute = url.includes('/super/')
 
       if (isRiderRoute) {
         localStorage.removeItem('swg_rider_token')
@@ -312,5 +317,45 @@ export const toggleRiderOnline = async (isOnline) => {
 //payment
 export const markPaymentCollected = async (orderId) => {
   const { data } = await axiosInstance.put(`/api/orders/${orderId}/payment`)
+  return data.data
+}
+
+export const rateDelivery = async (orderId, payload) => {
+  const { data } = await axiosInstance.put(`/api/orders/${orderId}/rate`, payload)
+  return data.data
+}
+
+export const getRiderEarnings = async () => {
+  const { data } = await axiosInstance.get('/api/riders/me/earnings')
+  return data.data
+}
+
+export const cancelOrder = async (orderId) => {
+  const { data } = await axiosInstance.put(`/api/orders/${orderId}/cancel`)
+  return data.data
+}
+
+export const getSavedAddresses = async () => {
+  const { data } = await axiosInstance.get('/api/customers/addresses')
+  return data.data || []
+}
+
+export const addSavedAddress = async (payload) => {
+  const { data } = await axiosInstance.post('/api/customers/addresses', payload)
+  return data.data
+}
+
+export const deleteSavedAddress = async (id) => {
+  const { data } = await axiosInstance.delete(`/api/customers/addresses/${id}`)
+  return data.data
+}
+
+export const getReconciliation = async () => {
+  const { data } = await axiosInstance.get('/api/orders/reconciliation')
+  return data.data
+}
+
+export const markRiderPayout = async (riderId, amount) => {
+  const { data } = await axiosInstance.put(`/api/riders/${riderId}/payout`, { amount })
   return data.data
 }

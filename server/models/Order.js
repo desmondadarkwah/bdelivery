@@ -77,6 +77,12 @@ const orderSchema = new mongoose.Schema({
   paymentCollected: { type: Boolean, default: false },
   paymentCollectedAt: { type: Date, default: null },
 
+  //rating
+  rating: {
+  stars:     { type: Number, min: 1, max: 5, default: null },
+  comment:   { type: String, default: '' },
+  ratedAt:   { type: Date, default: null },
+},
 }, { timestamps: true })
 
 

@@ -1,7 +1,6 @@
 import Order from '../models/Order.js'
 import Counter from '../models/Counter.js'
 import Rider from '../models/Rider.js'
-
 import { getIO } from '../socket.js'
 
 // Generate unique Order ID
@@ -57,7 +56,7 @@ export const createOrder = async (req, res) => {
     })
 
     // Notify all riders and admin in this tenant of new order
-  getIO()?.to(`tenant:${order.tenantId}`).emit('order:new', {
+    getIO()?.to(`tenant:${order.tenantId}`).emit('order:new', {
       orderID: order.orderID,
       pickupLocation: order.pickupLocation,
       dropoffLocation: order.dropoffLocation,
@@ -161,6 +160,15 @@ export const uploadProof = async (req, res) => {
       await Rider.findByIdAndUpdate(order.assignedRider, { $inc: { totalDeliveries: 1 } })
     }
 
+    // After incrementing totalDeliveries add:
+    await Rider.findByIdAndUpdate(order.assignedRider, {
+      $inc: {
+        totalDeliveries: 1,
+        totalEarnings: order.deliveryFee || 0,
+        pendingPayout: order.deliveryFee || 0,
+      }
+    })
+
     res.json({ success: true, data: order })
   } catch (err) {
     res.status(500).json({ error: err.message })
@@ -194,7 +202,7 @@ export const getStats = async (req, res) => {
 export const getAvailableOrders = async (req, res) => {
   try {
     const rider = await Rider.findById(req.rider.id)
-    
+
     if (!rider) return res.status(404).json({ error: 'Rider not found.' })
 
     // If offline return empty array
@@ -207,8 +215,8 @@ export const getAvailableOrders = async (req, res) => {
       assignedRider: null,
       tenantId: req.tenantId,
     })
-    .populate('assignedRider', 'name phone')
-    .sort({ createdAt: -1 })
+      .populate('assignedRider', 'name phone')
+      .sort({ createdAt: -1 })
 
     res.json({ success: true, data: orders })
   } catch (err) {
@@ -269,6 +277,136 @@ export const markPaymentCollected = async (req, res) => {
     })
 
     res.json({ success: true, data: updated })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}
+
+// PUT /api/orders/:id/rate — customer rates a delivery
+export const rateDelivery = async (req, res) => {
+  try {
+    const { stars, comment } = req.body
+
+    if (!stars || stars < 1 || stars > 5) {
+      return res.status(400).json({ error: 'Rating must be between 1 and 5 stars.' })
+    }
+
+    const order = await Order.findOne({
+      _id: req.params.id,
+      customer: req.customer.id,
+      status: 'delivered',
+      tenantId: req.tenantId,
+    })
+
+    if (!order) return res.status(404).json({ error: 'Order not found or not delivered yet.' })
+    if (order.rating?.stars) return res.status(400).json({ error: 'You have already rated this delivery.' })
+
+    const updated = await Order.findByIdAndUpdate(
+      req.params.id,
+      { rating: { stars, comment, ratedAt: new Date() } },
+      { returnDocument: 'after' }
+    ).populate('assignedRider', 'name phone')
+
+    // Update rider average rating
+    if (updated.assignedRider) {
+      const ratedOrders = await Order.find({
+        assignedRider: updated.assignedRider._id,
+        'rating.stars': { $ne: null },
+      })
+      const avgRating = ratedOrders.reduce((sum, o) => sum + o.rating.stars, 0) / ratedOrders.length
+      await Rider.findByIdAndUpdate(updated.assignedRider._id, {
+        avgRating: Math.round(avgRating * 10) / 10,
+        totalRatings: ratedOrders.length,
+      })
+    }
+
+    res.json({ success: true, data: updated })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}
+
+// PUT /api/orders/:id/cancel — customer cancels their order
+export const cancelOrder = async (req, res) => {
+  try {
+    const order = await Order.findOne({
+      _id: req.params.id,
+      customer: req.customer.id,
+      tenantId: req.tenantId,
+    })
+
+    if (!order) return res.status(404).json({ error: 'Order not found.' })
+
+    // Can only cancel if not yet picked up
+    const cancellableStatuses = ['received', 'assigned', 'accepted']
+    if (!cancellableStatuses.includes(order.status)) {
+      return res.status(400).json({ error: 'This order cannot be cancelled. The rider has already picked it up.' })
+    }
+
+    const updated = await Order.findByIdAndUpdate(
+      req.params.id,
+      { status: 'cancelled' },
+      { returnDocument: 'after' }
+    )
+
+    // Notify admin via socket
+    getIO()?.to(`tenant:${updated.tenantId}`).emit('order:updated', {
+      orderId: updated._id,
+      orderID: updated.orderID,
+      status: 'cancelled',
+    })
+
+    res.json({ success: true, data: updated })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+}
+
+// GET /api/orders/reconciliation — admin gets payment reconciliation
+export const getReconciliation = async (req, res) => {
+  try {
+    const now = new Date()
+
+    // Today
+    const startOfDay = new Date(now)
+    startOfDay.setHours(0, 0, 0, 0)
+
+    // This week
+    const startOfWeek = new Date(now)
+    startOfWeek.setDate(now.getDate() - now.getDay())
+    startOfWeek.setHours(0, 0, 0, 0)
+
+    // This month
+    const startOfMonth = new Date(now)
+    startOfMonth.setDate(1)
+    startOfMonth.setHours(0, 0, 0, 0)
+
+    const base = { tenantId: req.tenantId, status: 'delivered' }
+
+    const [todayOrders, weekOrders, monthOrders, allOrders] = await Promise.all([
+      Order.find({ ...base, createdAt: { $gte: startOfDay } }),
+      Order.find({ ...base, createdAt: { $gte: startOfWeek } }),
+      Order.find({ ...base, createdAt: { $gte: startOfMonth } }),
+      Order.find(base),
+    ])
+
+    const calc = (orders) => ({
+      count: orders.length,
+      total: orders.reduce((s, o) => s + (o.deliveryFee || 0), 0),
+      cashCollected: orders.filter(o => o.paymentMethod === 'cash' && o.paymentCollected).reduce((s, o) => s + (o.deliveryFee || 0), 0),
+      cashPending: orders.filter(o => o.paymentMethod === 'cash' && !o.paymentCollected).reduce((s, o) => s + (o.deliveryFee || 0), 0),
+      mobileMoney: orders.filter(o => o.paymentMethod === 'mobile-money').reduce((s, o) => s + (o.deliveryFee || 0), 0),
+    })
+
+    res.json({
+      success: true,
+      data: {
+        today: calc(todayOrders),
+        week:  calc(weekOrders),
+        month: calc(monthOrders),
+        all:   calc(allOrders),
+      }
+    })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }

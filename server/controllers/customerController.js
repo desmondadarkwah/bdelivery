@@ -98,3 +98,41 @@ export const deleteCustomer = async (req, res) => {
     res.json({ success: true, message: 'Customer deleted.' })
   } catch (err) { res.status(500).json({ error: err.message }) }
 }
+
+// GET /api/customers/addresses — get saved addresses
+export const getSavedAddresses = async (req, res) => {
+  try {
+    const customer = await Customer.findById(req.customer.id).select('savedAddresses')
+    res.json({ success: true, data: customer.savedAddresses || [] })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+}
+
+// POST /api/customers/addresses — add saved address
+export const addSavedAddress = async (req, res) => {
+  try {
+    const { label, address, coords } = req.body
+    if (!label || !address) return res.status(400).json({ error: 'Label and address are required.' })
+
+    const customer = await Customer.findById(req.customer.id)
+    if (customer.savedAddresses.length >= 5) {
+      return res.status(400).json({ error: 'Maximum 5 saved addresses allowed.' })
+    }
+
+    customer.savedAddresses.push({ label, address, coords })
+    await customer.save()
+
+    res.json({ success: true, data: customer.savedAddresses })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+}
+
+// DELETE /api/customers/addresses/:id — remove saved address
+export const deleteSavedAddress = async (req, res) => {
+  try {
+    const customer = await Customer.findById(req.customer.id)
+    customer.savedAddresses = customer.savedAddresses.filter(
+      a => a._id.toString() !== req.params.id
+    )
+    await customer.save()
+    res.json({ success: true, data: customer.savedAddresses })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+}

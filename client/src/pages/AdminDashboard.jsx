@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { LayoutDashboard, Package, Bike, Users, Clock, BarChart2, Settings, User } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAdminAuth } from '../context/AdminAuthContext'
 import { useTenant } from '../context/TenantContext'
@@ -207,10 +208,10 @@ function SettingsTab({ brand }) {
         </div>
       </div>
 
-      {error && <div className="adm-form-error" style={{ marginBottom: 14 }}>✕ {error}</div>}
-      {success && <div style={{ padding: '12px 16px', background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.25)', borderRadius: 10, color: '#86efac', fontSize: 13, marginBottom: 14 }}>✓ Settings saved! Refresh to see all changes.</div>}
+      {error && <div className="adm-form-error" style={{ marginBottom: 14 }}>{error}</div>}
+      {success && <div style={{ padding: '12px 16px', background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.25)', borderRadius: 10, color: '#86efac', fontSize: 13, marginBottom: 14 }}> Settings saved! Refresh to see all changes.</div>}
       <button className="adm-form-btn" style={{ maxWidth: 200 }} onClick={save} disabled={saving}>
-        {saving ? 'Saving...' : success ? '✓ Saved!' : 'Save Changes'}
+        {saving ? 'Saving...' : success ? 'Saved' : 'Save Changes'}
       </button>
     </div>
   )
@@ -254,8 +255,8 @@ function AccountTab() {
           <label className="adm-form-label">Confirm New Password</label>
           <input type="password" className="adm-form-input" value={form.confirmPassword} onChange={e => setForm({ ...form, confirmPassword: e.target.value })} placeholder="Repeat new password" />
         </div>
-        {error && <div className="adm-form-error">✕ {error}</div>}
-        {success && <div style={{ padding: '12px 16px', background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.25)', borderRadius: 10, color: '#86efac', fontSize: 13, marginBottom: 14 }}>✓ Password changed!</div>}
+        {error && <div className="adm-form-error">{error}</div>}
+        {success && <div style={{ padding: '12px 16px', background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.25)', borderRadius: 10, color: '#86efac', fontSize: 13, marginBottom: 14 }}> Password changed!</div>}
         <button className="adm-form-btn" onClick={save} disabled={saving}>
           {saving ? 'Changing...' : 'Change Password'}
         </button>
@@ -586,17 +587,17 @@ export default function AdminDashboard() {
             <div className="adm-sidebar-logo-text">{brand?.businessName || 'Dashboard'}</div>
           </a>
           {[
-            { id: 'overview', icon: '📊', label: 'Overview' },
-            { id: 'orders', icon: '📦', label: 'Orders' },
-            { id: 'riders', icon: '🏍️', label: 'Riders' },
-            { id: 'customers', icon: '👥', label: 'Customers' },
+            { id: 'overview', icon: '', label: 'Overview' },
+            { id: 'orders', icon: '', label: 'Orders' },
+            { id: 'riders', icon: '', label: 'Riders' },
+            { id: 'customers', icon: '', label: 'Customers' },
             { id: 'history', icon: '🕐', label: 'History' },
-            { id: 'reports', icon: '📈', label: 'Reports' },
+            { id: 'reports', icon: '', label: 'Reports' },
             { id: 'settings', icon: '⚙️', label: 'Settings' },
             { id: 'account', icon: '👤', label: 'Account' },
           ].map(tab => (
             <div key={tab.id} className={`adm-nav-item${activeTab === tab.id ? ' active' : ''}`} onClick={() => setActiveTab(tab.id)}>
-              <span className="adm-nav-icon">{tab.icon}</span>
+              <span className="adm-nav-icon" style={{display:"flex",alignItems:"center"}}>{tab.icon}</span>
               {tab.label}
             </div>
           ))}
@@ -621,17 +622,16 @@ export default function AdminDashboard() {
                 <>
                   <div className="adm-stats">
                     {[
-                      { label: 'Total Orders', value: stats?.total || 0, icon: '📦', color: brandColor },
-                      { label: 'Pending', value: stats?.pending || 0, icon: '⏳', color: '#f59e0b' },
-                      { label: 'Completed', value: stats?.completed || 0, icon: '✅', color: '#22c55e' },
-                      { label: 'Cancelled', value: stats?.cancelled || 0, icon: '❌', color: '#ef4444' },
-                      { label: 'Revenue', value: `GHS ${stats?.revenue || 0}`, icon: '💰', color: '#a78bfa' },
-                      { label: 'Cash Pending', value: orders.filter(o => o.status === 'delivered' && o.paymentMethod === 'cash' && !o.paymentCollected).length, icon: '💵', color: '#f59e0b' },
-                      { label: 'Riders', value: riders.filter(r => r.status === 'active').length, icon: '🏍️', color: '#38bdf8' },
-                      { label: 'Customers', value: customers.length, icon: '👥', color: '#ec4899' },
+                      { label: 'Total Orders', value: stats?.total || 0, icon: '', color: brandColor },
+                      { label: 'Pending', value: stats?.pending || 0, icon: '', color: '#f59e0b' },
+                      { label: 'Completed', value: stats?.completed || 0, icon: '', color: '#22c55e' },
+                      { label: 'Cancelled', value: stats?.cancelled || 0, icon: '', color: '#ef4444' },
+                      { label: 'Revenue', value: `GHS ${stats?.revenue || 0}`, icon: '', color: '#a78bfa' },
+                      { label: 'Cash Pending', value: orders.filter(o => o.status === 'delivered' && o.paymentMethod === 'cash' && !o.paymentCollected).length, icon: '', color: '#f59e0b' },
+                      { label: 'Riders', value: riders.filter(r => r.status === 'active').length, icon: '', color: '#38bdf8' },
+                      { label: 'Customers', value: customers.length, icon: '', color: '#ec4899' },
                     ].map(s => (
                       <div key={s.label} className="adm-stat" style={{ borderTop: `2px solid ${s.color}` }}>
-                        <div className="adm-stat-icon">{s.icon}</div>
                         <div className="adm-stat-num" style={{ color: s.color }}>{s.value}</div>
                         <div className="adm-stat-label">{s.label}</div>
                       </div>
@@ -698,7 +698,7 @@ export default function AdminDashboard() {
                             : o.paymentCollected
                             ? <span style={{ fontSize:11, color:'#86efac' }}>✅ Collected</span>
                             : o.status === 'delivered'
-                            ? <span style={{ fontSize:11, color:'#fca5a5' }}>⚠️ Pending</span>
+                            ? <span style={{ fontSize:11, color:'#fca5a5' }}>Pending</span>
                             : <span style={{ fontSize:11, color:'rgba(240,244,255,0.3)' }}>💵 Cash</span>
                           }
                         </td>
@@ -720,7 +720,7 @@ export default function AdminDashboard() {
               <button className="adm-add-btn" onClick={() => setRiderModal(true)}>+ Add New Rider</button>
               <div className="adm-table-wrap">
                 <table className="adm-table">
-                  <thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Deliveries</th><th>Status</th><th>Actions</th></tr></thead>
+                  <thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Deliveries</th><th>Rating</th><th>Status</th><th>Actions</th></tr></thead>
                   <tbody>
                     {riders.map(r => (
                       <tr key={r._id}>
@@ -728,6 +728,17 @@ export default function AdminDashboard() {
                         <td><span style={{ fontSize: 12 }}>{r.email}</span></td>
                         <td><span style={{ fontSize: 12 }}>{r.phone}</span></td>
                         <td><span style={{ color: brandColor, fontWeight: 600 }}>{r.totalDeliveries}</span></td>
+                        <td>
+                          {r.avgRating > 0 ? (
+                            <div style={{ display:'flex', alignItems:'center', gap:4 }}>
+                              <span style={{ color:'#f59e0b', fontSize:13 }}>★</span>
+                              <span style={{ fontSize:13, fontWeight:600, color:'#fff' }}>{r.avgRating}</span>
+                              <span style={{ fontSize:11, color:'rgba(240,244,255,0.3)' }}>({r.totalRatings})</span>
+                            </div>
+                          ) : (
+                            <span style={{ fontSize:11, color:'rgba(240,244,255,0.25)' }}>No ratings</span>
+                          )}
+                        </td>
                         <td>
                           <span style={{ padding: '4px 10px', borderRadius: 100, fontSize: 11, fontWeight: 600, background: r.status === 'active' ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)', color: r.status === 'active' ? '#86efac' : '#fca5a5', border: `1px solid ${r.status === 'active' ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'}` }}>
                             {r.status === 'active' ? 'Active' : 'Suspended'}
@@ -800,17 +811,16 @@ export default function AdminDashboard() {
               {stats && (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16, marginBottom: 32 }}>
                   {[
-                    { label: 'Total Orders', value: stats.total, icon: '📦', desc: 'All time bookings' },
-                    { label: 'Completed Deliveries', value: stats.completed, icon: '✅', desc: 'Successfully delivered' },
-                    { label: 'Pending Deliveries', value: stats.pending, icon: '⏳', desc: 'In progress' },
-                    { label: 'Cancelled Orders', value: stats.cancelled, icon: '❌', desc: 'Cancelled' },
-                    { label: 'Total Revenue', value: `GHS ${stats.revenue}`, icon: '💰', desc: 'From completed deliveries' },
-                    { label: 'Completion Rate', value: stats.total ? `${Math.round((stats.completed / stats.total) * 100)}%` : '0%', icon: '📈', desc: 'Success rate' },
-                    { label: 'Registered Customers', value: customers.length, icon: '👥', desc: 'Total accounts created' },
-                    { label: 'Active Riders', value: riders.filter(r => r.status === 'active').length, icon: '🏍️', desc: 'Available for delivery' },
+                    { label: 'Total Orders', value: stats.total, icon: '', desc: 'All time bookings' },
+                    { label: 'Completed Deliveries', value: stats.completed, icon: '', desc: 'Successfully delivered' },
+                    { label: 'Pending Deliveries', value: stats.pending, icon: '', desc: 'In progress' },
+                    { label: 'Cancelled Orders', value: stats.cancelled, icon: '', desc: 'Cancelled' },
+                    { label: 'Total Revenue', value: `GHS ${stats.revenue}`, icon: '', desc: 'From completed deliveries' },
+                    { label: 'Completion Rate', value: stats.total ? `${Math.round((stats.completed / stats.total) * 100)}%` : '0%', icon: '', desc: 'Success rate' },
+                    { label: 'Registered Customers', value: customers.length, icon: '', desc: 'Total accounts created' },
+                    { label: 'Active Riders', value: riders.filter(r => r.status === 'active').length, icon: '', desc: 'Available for delivery' },
                   ].map(s => (
                     <div key={s.label} className="adm-stat" style={{ borderTop: `2px solid ${brandColor}` }}>
-                      <div className="adm-stat-icon">{s.icon}</div>
                       <div className="adm-stat-num" style={{ color: brandColor, fontSize: 26 }}>{s.value}</div>
                       <div className="adm-stat-label">{s.label}</div>
                       <div style={{ fontSize: 11, color: 'rgba(240,244,255,0.2)', marginTop: 4 }}>{s.desc}</div>
@@ -821,13 +831,24 @@ export default function AdminDashboard() {
               <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 700, fontSize: 16, color: '#fff', marginBottom: 16 }}>Rider Performance</div>
               <div className="adm-table-wrap">
                 <table className="adm-table">
-                  <thead><tr><th>Rider</th><th>Phone</th><th>Total Deliveries</th><th>Status</th></tr></thead>
+                  <thead><tr><th>Rider</th><th>Phone</th><th>Total Deliveries</th><th>Rating</th><th>Status</th></tr></thead>
                   <tbody>
                     {[...riders].sort((a, b) => b.totalDeliveries - a.totalDeliveries).map(r => (
                       <tr key={r._id}>
                         <td><div className="adm-table-name">{r.name}</div><div className="adm-table-sub">{r.email}</div></td>
                         <td>{r.phone}</td>
                         <td><span style={{ color: brandColor, fontWeight: 700, fontSize: 16 }}>{r.totalDeliveries}</span></td>
+                        <td>
+                          {r.avgRating > 0 ? (
+                            <div style={{ display:'flex', alignItems:'center', gap:4 }}>
+                              <span style={{ color:'#f59e0b' }}>★</span>
+                              <span style={{ fontWeight:600, color:'#fff' }}>{r.avgRating}</span>
+                              <span style={{ fontSize:11, color:'rgba(240,244,255,0.3)' }}>({r.totalRatings} reviews)</span>
+                            </div>
+                          ) : (
+                            <span style={{ fontSize:11, color:'rgba(240,244,255,0.25)' }}>No ratings yet</span>
+                          )}
+                        </td>
                         <td><span style={{ fontSize: 11, color: r.status === 'active' ? '#86efac' : '#fca5a5' }}>{r.status}</span></td>
                       </tr>
                     ))}
@@ -854,7 +875,7 @@ export default function AdminDashboard() {
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <StatusBadge status={selectedOrder.status} />
-                <button className="adm-modal-close" onClick={() => setSelectedOrder(null)}>✕</button>
+                <button className="adm-modal-close" onClick={() => setSelectedOrder(null)}>×</button>
               </div>
             </div>
             <div className="adm-modal-body">
@@ -878,16 +899,16 @@ export default function AdminDashboard() {
                 <div className="adm-modal-section-title">Notify Recipient via WhatsApp</div>
                 <div className="adm-wa-btns">
                   <a href={`https://wa.me/${selectedOrder.recipientPhone?.replace(/\D/g, '')}?text=${encodeURIComponent(`${brand?.businessName || 'Delivery Service'}: A package has been scheduled for delivery to you. Order ID: ${selectedOrder.orderID}. Track here: ${SITE_URL}/track/${selectedOrder.orderID}`)}`} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px', background: 'rgba(37,211,102,0.08)', border: '1px solid rgba(37,211,102,0.2)', borderRadius: 10, color: '#4ade80', fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>
-                    📦 Notify: Package Booked for You
+                    Notify: Package Booked for You
                   </a>
                   {['assigned', 'accepted', 'picked-up', 'in-transit'].includes(selectedOrder.status) && (
                     <a href={`https://wa.me/${selectedOrder.recipientPhone?.replace(/\D/g, '')}?text=${encodeURIComponent(`${brand?.businessName || 'Delivery Service'}: Your package (Order ID: ${selectedOrder.orderID}) is on the way! Track here: ${SITE_URL}/track/${selectedOrder.orderID}`)}`} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px', background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: 10, color: '#93c5fd', fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>
-                      🏍️ Notify: Rider On The Way
+                      Notify: Rider On The Way
                     </a>
                   )}
                   {selectedOrder.status === 'delivered' && (
                     <a href={`https://wa.me/${selectedOrder.recipientPhone?.replace(/\D/g, '')}?text=${encodeURIComponent(`${brand?.businessName || 'Delivery Service'}: Your package (Order ID: ${selectedOrder.orderID}) has been delivered! Thank you.`)}`} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px', background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 10, color: '#86efac', fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>
-                      ✅ Notify: Package Delivered
+                      Notify: Package Delivered
                     </a>
                   )}
                 </div>
@@ -909,7 +930,7 @@ export default function AdminDashboard() {
                         : selectedOrder.paymentCollected
                         ? <span style={{ color:'#86efac' }}>✅ Cash Collected</span>
                         : selectedOrder.status === 'delivered'
-                        ? <span style={{ color:'#fca5a5' }}>⚠️ Cash Not Collected Yet</span>
+                        ? <span style={{ color:'#fca5a5' }}>Cash Not Collected Yet</span>
                         : <span style={{ color:'rgba(240,244,255,0.35)' }}>💵 Cash on Delivery</span>
                       }
                     </div>
@@ -937,7 +958,7 @@ export default function AdminDashboard() {
                       <option key={r._id} value={r._id}>{r.name} — {r.phone}</option>
                     ))}
                   </select>
-                  {selectedOrder.assignedRider && <div style={{ fontSize: 13, color: '#86efac' }}>✓ Assigned to <strong>{selectedOrder.assignedRider.name}</strong></div>}
+                  {selectedOrder.assignedRider && <div style={{ fontSize: 13, color: '#86efac' }}>Assigned to <strong>{selectedOrder.assignedRider.name}</strong></div>}
                 </div>
               )}
 
@@ -980,7 +1001,7 @@ export default function AdminDashboard() {
           <div className="adm-modal" style={{ maxWidth: 440 }}>
             <div className="adm-modal-head">
               <div className="adm-modal-title">Add New Rider</div>
-              <button className="adm-modal-close" onClick={() => setRiderModal(false)}>✕</button>
+              <button className="adm-modal-close" onClick={() => setRiderModal(false)}>×</button>
             </div>
             <div className="adm-modal-body">
               <form onSubmit={handleCreateRider}>
@@ -988,7 +1009,7 @@ export default function AdminDashboard() {
                 <div className="adm-form-field"><label className="adm-form-label">Email</label><input className="adm-form-input" type="email" value={riderForm.email} onChange={e => setRiderForm({ ...riderForm, email: e.target.value })} required placeholder="kofi@email.com" /></div>
                 <div className="adm-form-field"><label className="adm-form-label">Phone</label><input className="adm-form-input" value={riderForm.phone} onChange={e => setRiderForm({ ...riderForm, phone: e.target.value })} required placeholder="0244000000" /></div>
                 <div className="adm-form-field"><label className="adm-form-label">Password</label><input className="adm-form-input" type="password" value={riderForm.password} onChange={e => setRiderForm({ ...riderForm, password: e.target.value })} required placeholder="Minimum 6 characters" minLength={6} /></div>
-                {riderError && <div className="adm-form-error">✕ {riderError}</div>}
+                {riderError && <div className="adm-form-error">{riderError}</div>}
                 <button className="adm-form-btn" type="submit" disabled={riderLoading}>{riderLoading ? 'Adding...' : 'Add Rider'}</button>
               </form>
             </div>
