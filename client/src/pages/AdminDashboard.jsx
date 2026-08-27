@@ -9,7 +9,7 @@ import {
   assignRider, updateOrderStatus,
   fetchSettings, updateSettings, updateTenantMe, changeAdminPassword,
   fetchAllCustomers, deleteCustomer, fetchTenantPlanInfo,
-  markPaymentCollected,
+  markPaymentCollected, getReconciliation, markRiderPayout,
 } from '../utils/api'
 import { useSocket } from '../context/SocketContext'
 import NotificationBell from '../components/NotificationBell'
@@ -398,6 +398,184 @@ function PlanBanner({ planInfo }) {
   )
 }
 
+function ReconciliationTab({ brandColor }) {
+  const [data, setData]     = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [period, setPeriod] = useState('month')
+
+  useEffect(() => {
+    getReconciliation()
+      .then(setData)
+      .catch(console.error)
+      .finally(() => setLoading(false))
+  }, [])
+
+  if (loading) return <div className="adm-empty">Loading...</div>
+
+  const current = data?.[period] || {}
+
+  return (
+    <div>
+      <div className="adm-page-title">Payment Reconciliation</div>
+      <div className="adm-filters" style={{ marginBottom:24 }}>
+        {[
+          { value:'today', label:'Today' },
+          { value:'week',  label:'This Week' },
+          { value:'month', label:'This Month' },
+          { value:'all',   label:'All Time' },
+        ].map(p => (
+          <button key={p.value} className={`adm-filter-btn${period === p.value ? ' active' : ''}`} onClick={() => setPeriod(p.value)}>{p.label}</button>
+        ))}
+      </div>
+
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(200px, 1fr))', gap:16, marginBottom:28 }}>
+        {[
+          { label:'Total Revenue',    value:`GHS ${current.total || 0}`,         desc:`${current.count || 0} deliveries`, color: brandColor },
+          { label:'Cash Collected',   value:`GHS ${current.cashCollected || 0}`, desc:'Cash paid to riders',               color:'#22c55e' },
+          { label:'Cash Pending',     value:`GHS ${current.cashPending || 0}`,   desc:'Not yet collected',                 color:'#f59e0b' },
+          { label:'Mobile Money',     value:`GHS ${current.mobileMoney || 0}`,   desc:'Online payments',                   color:'#3b82f6' },
+        ].map(s => (
+          <div key={s.label} className="adm-stat" style={{ borderTop:`2px solid ${s.color}` }}>
+            <div className="adm-stat-num" style={{ color:s.color, fontSize:24 }}>{s.value}</div>
+            <div className="adm-stat-label">{s.label}</div>
+            <div style={{ fontSize:11, color:'rgba(240,244,255,0.25)', marginTop:4 }}>{s.desc}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Cash pending warning */}
+      {(current.cashPending || 0) > 0 && (
+        <div style={{ background:'rgba(245,158,11,0.08)', border:'1px solid rgba(245,158,11,0.2)', borderRadius:14, padding:'16px 20px', marginBottom:20, display:'flex', alignItems:'center', gap:12 }}>
+          <div style={{ width:8, height:8, borderRadius:'50%', background:'#f59e0b', flexShrink:0 }} />
+          <div>
+            <div style={{ fontSize:13, fontWeight:600, color:'#fcd34d', marginBottom:2 }}>GHS {current.cashPending} in cash not yet collected</div>
+            <div style={{ fontSize:11, color:'rgba(240,244,255,0.35)' }}>Remind riders to collect and mark cash as collected</div>
+          </div>
+        </div>
+      )}
+
+      {/* Period comparison */}
+      <div style={{ background:'rgba(255,255,255,0.03)', border:'1px solid rgba(255,255,255,0.07)', borderRadius:16, padding:24 }}>
+        <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:15, color:'#fff', marginBottom:20 }}>Period Comparison</div>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12 }}>
+          {[
+            { label:'Today',      d: data?.today },
+            { label:'This Week',  d: data?.week },
+            { label:'This Month', d: data?.month },
+            { label:'All Time',   d: data?.all },
+          ].map(p => (
+            <div key={p.label} style={{ background:'rgba(255,255,255,0.02)', borderRadius:10, padding:'14px 12px', textAlign:'center' }}>
+              <div style={{ fontSize:11, color:'rgba(240,244,255,0.3)', marginBottom:8, textTransform:'uppercase', letterSpacing:'0.04em' }}>{p.label}</div>
+              <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:800, fontSize:18, color: brandColor, marginBottom:4 }}>GHS {p.d?.total || 0}</div>
+              <div style={{ fontSize:11, color:'rgba(240,244,255,0.3)' }}>{p.d?.count || 0} orders</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function PayoutsTab({ brandColor, riders, loadAll }) {
+  const [payoutLoading, setPayoutLoading] = useState(null)
+  const [success, setSuccess]             = useState('')
+
+  const handlePayout = async (rider) => {
+    if (!rider.pendingPayout || rider.pendingPayout <= 0) {
+      alert('No pending payout for this rider.')
+      return
+    }
+    if (!confirm(`Mark GHS ${rider.pendingPayout} payout to ${rider.name} as done?`)) return
+    setPayoutLoading(rider._id)
+    try {
+      await markRiderPayout(rider._id, rider.pendingPayout)
+      setSuccess(`Payout of GHS ${rider.pendingPayout} to ${rider.name} marked as done.`)
+      loadAll()
+      setTimeout(() => setSuccess(''), 4000)
+    } catch(e) { alert(e.response?.data?.error || 'Failed to mark payout.') }
+    finally { setPayoutLoading(null) }
+  }
+
+  const totalPending = riders.reduce((s, r) => s + (r.pendingPayout || 0), 0)
+
+  return (
+    <div>
+      <div className="adm-page-title">Rider Payouts</div>
+
+      {success && (
+        <div style={{ background:'rgba(34,197,94,0.1)', border:'1px solid rgba(34,197,94,0.25)', borderRadius:10, padding:'12px 16px', color:'#86efac', fontSize:13, marginBottom:20 }}>
+          {success}
+        </div>
+      )}
+
+      {/* Summary */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:16, marginBottom:24 }}>
+        {[
+          { label:'Total Pending Payouts', value:`GHS ${totalPending}`,                                                              color:'#f59e0b' },
+          { label:'Total Paid Out',        value:`GHS ${riders.reduce((s,r) => s + (r.totalPaidOut || 0), 0)}`,                     color:'#22c55e' },
+          { label:'Total Rider Earnings',  value:`GHS ${riders.reduce((s,r) => s + (r.totalEarnings || 0), 0)}`,                    color: brandColor },
+        ].map(s => (
+          <div key={s.label} className="adm-stat" style={{ borderTop:`2px solid ${s.color}` }}>
+            <div className="adm-stat-num" style={{ color:s.color, fontSize:22 }}>{s.value}</div>
+            <div className="adm-stat-label">{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="adm-table-wrap">
+        <table className="adm-table">
+          <thead>
+            <tr>
+              <th>Rider</th>
+              <th>Total Earnings</th>
+              <th>Pending Payout</th>
+              <th>Total Paid Out</th>
+              <th>Last Paid</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {riders.map(r => (
+              <tr key={r._id}>
+                <td>
+                  <div className="adm-table-name">{r.name}</div>
+                  <div className="adm-table-sub">{r.phone}</div>
+                </td>
+                <td><span style={{ color: brandColor, fontWeight:600 }}>GHS {r.totalEarnings || 0}</span></td>
+                <td>
+                  <span style={{ color: (r.pendingPayout || 0) > 0 ? '#f59e0b' : '#86efac', fontWeight:600 }}>
+                    GHS {r.pendingPayout || 0}
+                  </span>
+                </td>
+                <td><span style={{ color:'#86efac' }}>GHS {r.totalPaidOut || 0}</span></td>
+                <td>
+                  <span style={{ fontSize:11, color:'rgba(240,244,255,0.35)' }}>
+                    {r.lastPaidOutAt ? new Date(r.lastPaidOutAt).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : 'Never'}
+                  </span>
+                </td>
+                <td>
+                  {(r.pendingPayout || 0) > 0 ? (
+                    <button
+                      className="adm-btn-sm adm-btn-green"
+                      onClick={() => handlePayout(r)}
+                      disabled={payoutLoading === r._id}
+                    >
+                      {payoutLoading === r._id ? 'Processing...' : `Pay GHS ${r.pendingPayout}`}
+                    </button>
+                  ) : (
+                    <span style={{ fontSize:12, color:'rgba(240,244,255,0.25)' }}>No pending</span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {riders.length === 0 && <div className="adm-empty">No riders yet.</div>}
+      </div>
+    </div>
+  )
+}
+
 export default function AdminDashboard() {
   const { logout } = useAdminAuth()
   const { tenant } = useTenant()
@@ -587,14 +765,16 @@ export default function AdminDashboard() {
             <div className="adm-sidebar-logo-text">{brand?.businessName || 'Dashboard'}</div>
           </a>
           {[
-            { id: 'overview', icon: '', label: 'Overview' },
-            { id: 'orders', icon: '', label: 'Orders' },
-            { id: 'riders', icon: '', label: 'Riders' },
-            { id: 'customers', icon: '', label: 'Customers' },
-            { id: 'history', icon: '🕐', label: 'History' },
-            { id: 'reports', icon: '', label: 'Reports' },
-            { id: 'settings', icon: '⚙️', label: 'Settings' },
-            { id: 'account', icon: '👤', label: 'Account' },
+            { id: 'overview',       icon: '', label: 'Overview' },
+            { id: 'orders',         icon: '', label: 'Orders' },
+            { id: 'riders',         icon: '', label: 'Riders' },
+            { id: 'customers',      icon: '', label: 'Customers' },
+            { id: 'history',        icon: '', label: 'History' },
+            { id: 'reconciliation', icon: '', label: 'Payments' },
+            { id: 'payouts',        icon: '', label: 'Payouts' },
+            { id: 'reports',        icon: '', label: 'Reports' },
+            { id: 'settings',       icon: '', label: 'Settings' },
+            { id: 'account',        icon: '', label: 'Account' },
           ].map(tab => (
             <div key={tab.id} className={`adm-nav-item${activeTab === tab.id ? ' active' : ''}`} onClick={() => setActiveTab(tab.id)}>
               <span className="adm-nav-icon" style={{display:"flex",alignItems:"center"}}>{tab.icon}</span>
@@ -861,6 +1041,8 @@ export default function AdminDashboard() {
 
           {activeTab === 'settings' && <SettingsTab brand={brand} />}
           {activeTab === 'account' && <AccountTab />}
+          {activeTab === 'reconciliation' && <ReconciliationTab brandColor={brandColor} />}
+          {activeTab === 'payouts' && <PayoutsTab brandColor={brandColor} riders={riders} loadAll={loadAll} />}
         </main>
       </div>
 
