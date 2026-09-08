@@ -85,25 +85,5 @@ router.delete('/customers/addresses/:id', protectCustomer, deleteSavedAddress)
 router.put('/riders/:id/payout', protectTenant, markRiderPayout)
 router.get('/orders/reconciliation', protectTenant, getReconciliation)
 
-router.get('/riders/recalculate-earnings', async (req, res) => {
-  try {
-    const Rider = (await import('../models/Rider.js')).default
-    const Order = (await import('../models/Order.js')).default
-    const riders = await Rider.find()
-    for (const rider of riders) {
-      const orders = await Order.find({
-        assignedRider: rider._id,
-        status: 'delivered'
-      })
-      const total = orders.reduce((s, o) => s + (o.deliveryFee || 0), 0)
-      await Rider.findByIdAndUpdate(rider._id, {
-        totalEarnings: total,
-        totalDeliveries: orders.length,
-        pendingPayout: total - (rider.totalPaidOut || 0),
-      })
-    }
-    res.json({ success: true, message: `Recalculated earnings for ${riders.length} riders.` })
-  } catch(err) { res.status(500).json({ error: err.message }) }
-})
 
 export default router

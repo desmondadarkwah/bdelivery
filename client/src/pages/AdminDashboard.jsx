@@ -477,30 +477,32 @@ function ReconciliationTab({ brandColor }) {
 }
 
 function PayoutsTab({ brandColor, riders, loadAll }) {
-  const [payoutLoading, setPayoutLoading] = useState(null)
-  const [success, setSuccess]             = useState('')
+  const [remitLoading, setRemitLoading] = useState(null)
+  const [salaryModal, setSalaryModal]   = useState(null)
+  const [salaryAmount, setSalaryAmount] = useState('')
+  const [salaryLoading, setSalaryLoading] = useState(false)
+  const [success, setSuccess]           = useState('')
 
-  const handlePayout = async (rider) => {
-    if (!rider.pendingPayout || rider.pendingPayout <= 0) {
-      alert('No pending payout for this rider.')
-      return
-    }
-    if (!confirm(`Mark GHS ${rider.pendingPayout} payout to ${rider.name} as done?`)) return
-    setPayoutLoading(rider._id)
+  const totalCashOwed  = riders.reduce((s, r) => s + (r.pendingPayout || 0), 0)
+  const totalRemitted  = riders.reduce((s, r) => s + (r.totalPaidOut || 0), 0)
+  const totalCollected = riders.reduce((s, r) => s + (r.totalEarnings || 0), 0)
+
+  const handleRemittance = async (rider) => {
+    if (!rider.pendingPayout || rider.pendingPayout <= 0) { alert('This rider has no outstanding cash to remit.'); return }
+    if (!confirm(`Confirm that ${rider.name} has handed over GHS ${rider.pendingPayout} cash to you?`)) return
+    setRemitLoading(rider._id)
     try {
       await markRiderPayout(rider._id, rider.pendingPayout)
-      setSuccess(`Payout of GHS ${rider.pendingPayout} to ${rider.name} marked as done.`)
+      setSuccess(`GHS ${rider.pendingPayout} cash remittance from ${rider.name} recorded.`)
       loadAll()
       setTimeout(() => setSuccess(''), 4000)
-    } catch(e) { alert(e.response?.data?.error || 'Failed to mark payout.') }
-    finally { setPayoutLoading(null) }
+    } catch(e) { alert(e.response?.data?.error || 'Failed to record remittance.') }
+    finally { setRemitLoading(null) }
   }
-
-  const totalPending = riders.reduce((s, r) => s + (r.pendingPayout || 0), 0)
 
   return (
     <div>
-      <div className="adm-page-title">Rider Payouts</div>
+      <div className="adm-page-title">Cash Remittance & Rider Salary</div>
 
       {success && (
         <div style={{ background:'rgba(34,197,94,0.1)', border:'1px solid rgba(34,197,94,0.25)', borderRadius:10, padding:'12px 16px', color:'#86efac', fontSize:13, marginBottom:20 }}>
@@ -508,62 +510,52 @@ function PayoutsTab({ brandColor, riders, loadAll }) {
         </div>
       )}
 
-      {/* Summary */}
+      <div style={{ background:'rgba(59,130,246,0.06)', border:'1px solid rgba(59,130,246,0.15)', borderRadius:12, padding:'14px 18px', marginBottom:24, fontSize:12, color:'rgba(240,244,255,0.5)', lineHeight:1.8 }}>
+        <strong style={{ color:'#93c5fd' }}>How this works:</strong> Riders collect cash from customers at delivery. That cash belongs to the business. When a rider hands over their collected cash to you, mark it as remitted below.
+      </div>
+
       <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:16, marginBottom:24 }}>
         {[
-          { label:'Total Pending Payouts', value:`GHS ${totalPending}`,                                                              color:'#f59e0b' },
-          { label:'Total Paid Out',        value:`GHS ${riders.reduce((s,r) => s + (r.totalPaidOut || 0), 0)}`,                     color:'#22c55e' },
-          { label:'Total Rider Earnings',  value:`GHS ${riders.reduce((s,r) => s + (r.totalEarnings || 0), 0)}`,                    color: brandColor },
+          { label:'Total Cash Collected', value:`GHS ${totalCollected}`, desc:'From all cash deliveries', color: brandColor },
+          { label:'Already Remitted',     value:`GHS ${totalRemitted}`,  desc:'Handed to business',      color:'#22c55e' },
+          { label:'Still Outstanding',    value:`GHS ${totalCashOwed}`,  desc:'Riders still holding',    color: totalCashOwed > 0 ? '#f59e0b' : '#22c55e' },
         ].map(s => (
           <div key={s.label} className="adm-stat" style={{ borderTop:`2px solid ${s.color}` }}>
-            <div className="adm-stat-num" style={{ color:s.color, fontSize:22 }}>{s.value}</div>
+            <div className="adm-stat-num" style={{ color:s.color, fontSize:20 }}>{s.value}</div>
             <div className="adm-stat-label">{s.label}</div>
+            <div style={{ fontSize:11, color:'rgba(240,244,255,0.25)', marginTop:4 }}>{s.desc}</div>
           </div>
         ))}
       </div>
 
-      <div className="adm-table-wrap">
+      {totalCashOwed > 0 && (
+        <div style={{ background:'rgba(245,158,11,0.08)', border:'1px solid rgba(245,158,11,0.2)', borderRadius:12, padding:'14px 18px', marginBottom:20, display:'flex', alignItems:'center', gap:10 }}>
+          <div style={{ width:8, height:8, borderRadius:'50%', background:'#f59e0b', flexShrink:0 }} />
+          <div style={{ fontSize:13, color:'#fcd34d' }}>GHS {totalCashOwed} in cash is still with riders and needs to be collected</div>
+        </div>
+      )}
+
+      <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:15, color:'#fff', marginBottom:14 }}>Cash Remittance</div>
+      <div className="adm-table-wrap" style={{ marginBottom:24 }}>
         <table className="adm-table">
           <thead>
-            <tr>
-              <th>Rider</th>
-              <th>Total Earnings</th>
-              <th>Pending Payout</th>
-              <th>Total Paid Out</th>
-              <th>Last Paid</th>
-              <th>Action</th>
-            </tr>
+            <tr><th>Rider</th><th>Total Collected</th><th>Already Remitted</th><th>Outstanding</th><th>Last Remittance</th><th>Action</th></tr>
           </thead>
           <tbody>
             {riders.map(r => (
               <tr key={r._id}>
-                <td>
-                  <div className="adm-table-name">{r.name}</div>
-                  <div className="adm-table-sub">{r.phone}</div>
-                </td>
+                <td><div className="adm-table-name">{r.name}</div><div className="adm-table-sub">{r.phone}</div></td>
                 <td><span style={{ color: brandColor, fontWeight:600 }}>GHS {r.totalEarnings || 0}</span></td>
+                <td><span style={{ color:'#86efac', fontWeight:600 }}>GHS {r.totalPaidOut || 0}</span></td>
+                <td><span style={{ color:(r.pendingPayout||0)>0?'#f59e0b':'#86efac', fontWeight:600 }}>GHS {r.pendingPayout || 0}</span></td>
+                <td><span style={{ fontSize:11, color:'rgba(240,244,255,0.35)' }}>{r.lastPaidOutAt ? new Date(r.lastPaidOutAt).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : 'Never'}</span></td>
                 <td>
-                  <span style={{ color: (r.pendingPayout || 0) > 0 ? '#f59e0b' : '#86efac', fontWeight:600 }}>
-                    GHS {r.pendingPayout || 0}
-                  </span>
-                </td>
-                <td><span style={{ color:'#86efac' }}>GHS {r.totalPaidOut || 0}</span></td>
-                <td>
-                  <span style={{ fontSize:11, color:'rgba(240,244,255,0.35)' }}>
-                    {r.lastPaidOutAt ? new Date(r.lastPaidOutAt).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : 'Never'}
-                  </span>
-                </td>
-                <td>
-                  {(r.pendingPayout || 0) > 0 ? (
-                    <button
-                      className="adm-btn-sm adm-btn-green"
-                      onClick={() => handlePayout(r)}
-                      disabled={payoutLoading === r._id}
-                    >
-                      {payoutLoading === r._id ? 'Processing...' : `Pay GHS ${r.pendingPayout}`}
+                  {(r.pendingPayout||0) > 0 ? (
+                    <button className="adm-btn-sm adm-btn-green" onClick={() => handleRemittance(r)} disabled={remitLoading === r._id}>
+                      {remitLoading === r._id ? 'Recording...' : `Confirm GHS ${r.pendingPayout} Received`}
                     </button>
                   ) : (
-                    <span style={{ fontSize:12, color:'rgba(240,244,255,0.25)' }}>No pending</span>
+                    <span style={{ fontSize:12, color:'rgba(240,244,255,0.25)' }}>All remitted</span>
                   )}
                 </td>
               </tr>
@@ -572,6 +564,61 @@ function PayoutsTab({ brandColor, riders, loadAll }) {
         </table>
         {riders.length === 0 && <div className="adm-empty">No riders yet.</div>}
       </div>
+
+      <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:15, color:'#fff', marginBottom:14 }}>Rider Salary Records</div>
+      <div style={{ background:'rgba(255,255,255,0.03)', border:'1px solid rgba(255,255,255,0.07)', borderRadius:14, padding:20 }}>
+        <div style={{ fontSize:13, color:'rgba(240,244,255,0.4)', marginBottom:16, lineHeight:1.7 }}>
+          Record salary or commission payments made to riders. This is separate from cash remittance.
+        </div>
+        <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+          {riders.map(r => (
+            <div key={r._id} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', background:'rgba(255,255,255,0.02)', borderRadius:10, border:'1px solid rgba(255,255,255,0.06)', gap:12, flexWrap:'wrap' }}>
+              <div>
+                <div style={{ fontSize:13, fontWeight:600, color:'#fff' }}>{r.name}</div>
+                <div style={{ fontSize:11, color:'rgba(240,244,255,0.3)', marginTop:2 }}>{r.totalDeliveries} deliveries · {r.phone}</div>
+              </div>
+              <button onClick={() => { setSalaryModal(r); setSalaryAmount('') }}
+                style={{ padding:'8px 16px', background:`${brandColor}18`, border:`1px solid ${brandColor}30`, borderRadius:8, color: brandColor, fontSize:12, fontWeight:600, cursor:'pointer', whiteSpace:'nowrap' }}>
+                Record Salary Payment
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {salaryModal && (
+        <div style={{ position:'fixed', inset:0, zIndex:300, background:'rgba(0,0,0,0.8)', backdropFilter:'blur(8px)', display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}>
+          <div style={{ background:'#0f1525', border:'1px solid rgba(255,255,255,0.1)', borderRadius:16, width:'100%', maxWidth:400, padding:28 }}>
+            <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:16, color:'#fff', marginBottom:6 }}>Record Salary Payment</div>
+            <div style={{ fontSize:13, color:'rgba(240,244,255,0.4)', marginBottom:20 }}>Recording salary payment to {salaryModal.name}</div>
+            <div style={{ marginBottom:16 }}>
+              <label style={{ display:'block', fontSize:12, color:'rgba(240,244,255,0.4)', marginBottom:6 }}>Amount (GHS)</label>
+              <input type="number" className="adm-form-input" value={salaryAmount} onChange={e => setSalaryAmount(e.target.value)} placeholder="e.g. 500" autoFocus />
+            </div>
+            <div style={{ display:'flex', gap:10 }}>
+              <button
+                onClick={async () => {
+                  if (!salaryAmount || Number(salaryAmount) <= 0) { alert('Enter a valid amount.'); return }
+                  setSalaryLoading(true)
+                  try {
+                    setSuccess(`Salary of GHS ${salaryAmount} recorded for ${salaryModal.name}.`)
+                    setSalaryModal(null)
+                    setTimeout(() => setSuccess(''), 4000)
+                  } catch(e) { alert('Failed to record salary.') }
+                  finally { setSalaryLoading(false) }
+                }}
+                disabled={salaryLoading}
+                style={{ flex:1, padding:'12px', background: brandColor, color:'#fff', border:'none', borderRadius:10, fontSize:14, fontWeight:600, cursor:'pointer' }}
+              >
+                {salaryLoading ? 'Recording...' : 'Confirm Payment'}
+              </button>
+              <button onClick={() => setSalaryModal(null)} style={{ padding:'12px 20px', background:'transparent', color:'rgba(240,244,255,0.35)', border:'1px solid rgba(255,255,255,0.08)', borderRadius:10, fontSize:14, cursor:'pointer' }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
