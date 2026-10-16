@@ -6,7 +6,7 @@ import { upload } from '../middleware/uploadMiddleware.js'
 // Controllers
 import { setupSuperAdmin, loginSuperAdmin, getPlatformStats } from '../controllers/superAdminController.js'
 import { createTenant, getAllTenants, getTenantBySubdomain, updateTenant, updateTenantStatus, deleteTenant, loginTenantAdmin, getTenantMe, updateTenantMe, getTenantPlanInfo } from '../controllers/tenantController.js'
-import { createRider, loginRider, getAllRiders, getRiderMe, updateRiderStatus, deleteRider, toggleRiderOnline, getRiderEarnings, markRiderPayout } from '../controllers/riderController.js'
+import { createRider, loginRider, getAllRiders, getRiderMe, updateRiderStatus, deleteRider, toggleRiderOnline, getRiderEarnings, markRiderPayout, updateRiderMe, changeRiderPassword } from '../controllers/riderController.js'
 import { createOrder, getAllOrders, trackOrder, getRiderOrders, assignRider, updateOrderStatus, uploadProof, getStats, getAvailableOrders, selfAssignOrder, markPaymentCollected, rateDelivery, cancelOrder, getReconciliation } from '../controllers/orderController.js'
 import { registerCustomer, loginCustomer, getCustomerMe, updateCustomerProfile, changeCustomerPassword, getCustomerOrders, getAllCustomers, deleteCustomer, getSavedAddresses, addSavedAddress, deleteSavedAddress } from '../controllers/customerController.js'
 
@@ -45,6 +45,9 @@ router.post('/riders', protectTenant, checkRiderLimit, createRider)
 router.get('/riders', protectTenant, getAllRiders)
 router.put('/riders/:id/status', protectTenant, updateRiderStatus)
 router.delete('/riders/:id', protectTenant, deleteRider)
+
+router.put('/riders/me/profile', protectRider, updateRiderMe)
+router.put('/riders/me/password', protectRider, changeRiderPassword)
 
 // ─── ORDERS ───────────────────────────────────────────
 router.post('/orders', resolveTenant, checkOrderLimit, upload.single('packageImage'), createOrder)

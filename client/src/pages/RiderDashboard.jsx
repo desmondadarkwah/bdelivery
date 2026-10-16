@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useRiderAuth } from '../context/RiderAuthContext'
 import { useTenant } from '../context/TenantContext'
-import { getRiderOrders, updateOrderStatus, uploadProof, getRiderMe, getAvailableOrders, selfAssignOrder, markPaymentCollected, getRiderEarnings } from '../utils/api'
+import { getRiderOrders, updateOrderStatus, uploadProof, getRiderMe, getAvailableOrders, selfAssignOrder, markPaymentCollected, getRiderEarnings, updateRiderProfile, changeRiderPassword } from '../utils/api'
 import RiderMap from '../components/RiderMap'
 import { useSocket } from '../context/SocketContext'
 import { toggleRiderOnline } from '../utils/api'
@@ -33,6 +33,87 @@ const NEXT_ACTION = {
   assigned:    { label: 'Confirm Acceptance', next: 'accepted',   btn: 'rd-btn-orange' },
   accepted:    { label: 'Mark as Picked Up',  next: 'picked-up',  btn: 'rd-btn-orange' },
   'picked-up': { label: 'Mark as In Transit', next: 'in-transit', btn: 'rd-btn-blue' },
+}
+
+function RiderProfileTab({ riderInfo, brandColor, onUpdated }) {
+  const [form, setForm] = useState({ name: riderInfo?.name || '', phone: riderInfo?.phone || '' })
+  const [pwForm, setPwForm] = useState({ currentPassword:'', newPassword:'', confirmPassword:'' })
+  const [saving, setSaving] = useState(false)
+  const [pwSaving, setPwSaving] = useState(false)
+  const [success, setSuccess] = useState('')
+  const [error, setError] = useState('')
+  const [pwError, setPwError] = useState('')
+
+  const saveProfile = async () => {
+    setSaving(true); setError(''); setSuccess('')
+    try {
+      await updateRiderProfile(form)
+      setSuccess('Profile updated successfully!')
+      onUpdated()
+      setTimeout(() => setSuccess(''), 3000)
+    } catch(e) { setError(e.response?.data?.error || 'Failed to save.') }
+    finally { setSaving(false) }
+  }
+
+  const savePw = async () => {
+    setPwError('')
+    if (!pwForm.currentPassword || !pwForm.newPassword || !pwForm.confirmPassword) { setPwError('All fields required.'); return }
+    if (pwForm.newPassword !== pwForm.confirmPassword) { setPwError('Passwords do not match.'); return }
+    if (pwForm.newPassword.length < 6) { setPwError('Minimum 6 characters.'); return }
+    setPwSaving(true)
+    try {
+      await changeRiderPassword({ currentPassword: pwForm.currentPassword, newPassword: pwForm.newPassword })
+      setSuccess('Password changed successfully!')
+      setPwForm({ currentPassword:'', newPassword:'', confirmPassword:'' })
+      setTimeout(() => setSuccess(''), 3000)
+    } catch(e) { setPwError(e.response?.data?.error || 'Incorrect current password.') }
+    finally { setPwSaving(false) }
+  }
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+      {success && <div style={{ padding:'12px 16px', background:'rgba(34,197,94,0.1)', border:'1px solid rgba(34,197,94,0.25)', borderRadius:10, color:'#86efac', fontSize:13 }}>{success}</div>}
+
+      {/* Profile info */}
+      <div style={{ background:'rgba(255,255,255,0.03)', border:'1px solid rgba(255,255,255,0.07)', borderRadius:16, padding:20 }}>
+        <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:15, color:'#fff', marginBottom:16 }}>Personal Information</div>
+        <div style={{ marginBottom:12 }}>
+          <div style={{ fontSize:12, color:'rgba(240,244,255,0.4)', marginBottom:6 }}>Full Name</div>
+          <input value={form.name} onChange={e => setForm({...form,name:e.target.value})} placeholder="Your full name"
+            style={{ width:'100%', background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.09)', borderRadius:10, padding:'12px 14px', fontSize:14, color:'#fff', outline:'none', fontFamily:'Inter,sans-serif', boxSizing:'border-box' }} />
+        </div>
+        <div style={{ marginBottom:16 }}>
+          <div style={{ fontSize:12, color:'rgba(240,244,255,0.4)', marginBottom:6 }}>Phone Number</div>
+          <input value={form.phone} onChange={e => setForm({...form,phone:e.target.value})} placeholder="0244000000"
+            style={{ width:'100%', background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.09)', borderRadius:10, padding:'12px 14px', fontSize:14, color:'#fff', outline:'none', fontFamily:'Inter,sans-serif', boxSizing:'border-box' }} />
+        </div>
+        {error && <div style={{ fontSize:12, color:'#fca5a5', marginBottom:10 }}>✕ {error}</div>}
+        <button onClick={saveProfile} disabled={saving}
+          style={{ padding:'11px 24px', background: brandColor, color:'#fff', border:'none', borderRadius:10, fontSize:13, fontWeight:600, cursor:'pointer', opacity: saving ? 0.6 : 1 }}>
+          {saving ? 'Saving...' : 'Save Changes'}
+        </button>
+      </div>
+
+      {/* Change password */}
+      <div style={{ background:'rgba(255,255,255,0.03)', border:'1px solid rgba(255,255,255,0.07)', borderRadius:16, padding:20 }}>
+        <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:15, color:'#fff', marginBottom:16 }}>Change Password</div>
+        {['currentPassword','newPassword','confirmPassword'].map((key, i) => (
+          <div key={key} style={{ marginBottom:12 }}>
+            <div style={{ fontSize:12, color:'rgba(240,244,255,0.4)', marginBottom:6 }}>
+              {i === 0 ? 'Current Password' : i === 1 ? 'New Password' : 'Confirm New Password'}
+            </div>
+            <input type="password" value={pwForm[key]} onChange={e => setPwForm({...pwForm,[key]:e.target.value})} placeholder="••••••••"
+              style={{ width:'100%', background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.09)', borderRadius:10, padding:'12px 14px', fontSize:14, color:'#fff', outline:'none', fontFamily:'Inter,sans-serif', boxSizing:'border-box' }} />
+          </div>
+        ))}
+        {pwError && <div style={{ fontSize:12, color:'#fca5a5', marginBottom:10 }}>✕ {pwError}</div>}
+        <button onClick={savePw} disabled={pwSaving}
+          style={{ padding:'11px 24px', background: brandColor, color:'#fff', border:'none', borderRadius:10, fontSize:13, fontWeight:600, cursor:'pointer', opacity: pwSaving ? 0.6 : 1 }}>
+          {pwSaving ? 'Changing...' : 'Change Password'}
+        </button>
+      </div>
+    </div>
+  )
 }
 
 export default function RiderDashboard() {
@@ -352,6 +433,9 @@ export default function RiderDashboard() {
             <button className={`rd-tab${activeTab === 'earnings' ? ' active' : ''}`} onClick={() => setActiveTab('earnings')}>
               Earnings
             </button>
+            <button className={`rd-tab${activeTab === 'profile' ? ' active' : ''}`} onClick={() => setActiveTab('profile')}>
+              Profile
+            </button>
           </div>
 
           {loading ? (
@@ -396,6 +480,8 @@ export default function RiderDashboard() {
                 ))
               )}
             </div>
+          ) : activeTab === 'profile' ? (
+            <RiderProfileTab riderInfo={riderInfo} brandColor={brandColor} onUpdated={loadAll} />
           ) : activeTab === 'available' ? (
             availableOrders.length === 0 ? (
               <div className="rd-empty">

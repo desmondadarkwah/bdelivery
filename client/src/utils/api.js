@@ -31,15 +31,17 @@ axiosInstance.interceptors.request.use((config) => {
     url.includes('/self-assign') ||
     url.includes('/proof') ||
     url.includes('/payment') ||
-    url.includes('/earnings')
+    url.includes('/earnings') ||
+    url.includes('/riders/me/profile') ||
+    url.includes('/riders/me/password')
 
   const isCustomerRoute =
     url.includes('/customers/me') ||
     url.includes('/customers/orders') ||
     url.includes('/customers/me/password') ||
     url.includes('/rate') ||
-    url.includes('/cancel')||
-    url.includes('/customers/addresses') 
+    url.includes('/cancel') ||
+    url.includes('/customers/addresses')
 
   const isSuperRoute = url.includes('/super/')
   const isTenantRoute = url.includes('/tenant/me')
@@ -358,4 +360,14 @@ export const getReconciliation = async () => {
 export const markRiderPayout = async (riderId, amount) => {
   const { data } = await axiosInstance.put(`/api/riders/${riderId}/payout`, { amount })
   return data.data
+}
+
+export const updateRiderProfile = async (payload) => {
+  const { data } = await axiosInstance.put('/api/riders/me/profile', payload)
+  return data.data
+}
+
+export const changeRiderPassword = async (payload) => {
+  const { data } = await axiosInstance.put('/api/riders/me/password', payload)
+  return data
 }

@@ -1,5 +1,6 @@
 import Rider from '../models/Rider.js'
 import jwt from 'jsonwebtoken'
+import bcrypt from 'bcryptjs'
 
 const generateToken = (id) => jwt.sign({ id, role: 'rider' }, process.env.JWT_SECRET, { expiresIn: '30d' })
 
@@ -157,4 +158,30 @@ export const markRiderPayout = async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
+}
+
+// PUT /api/riders/me — rider updates their own profile
+export const updateRiderMe = async (req, res) => {
+  try {
+    const { name, phone } = req.body
+    const rider = await Rider.findByIdAndUpdate(
+      req.rider.id,
+      { name, phone },
+      { returnDocument: 'after' }
+    ).select('-password')
+    res.json({ success: true, data: rider })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+}
+
+// PUT /api/riders/me/password — rider changes password
+export const changeRiderPassword = async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body
+    const rider = await Rider.findById(req.rider.id)
+    const match = await bcrypt.compare(currentPassword, rider.password)
+    if (!match) return res.status(400).json({ error: 'Current password is incorrect.' })
+    rider.password = await bcrypt.hash(newPassword, 10)
+    await rider.save()
+    res.json({ success: true, message: 'Password changed successfully.' })
+  } catch (err) { res.status(500).json({ error: err.message }) }
 }

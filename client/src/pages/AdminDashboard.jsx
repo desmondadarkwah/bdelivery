@@ -649,6 +649,7 @@ export default function AdminDashboard() {
   const [riderLoading, setRiderLoading] = useState(false)
   const [riderError, setRiderError] = useState('')
   const [historySearch, setHistorySearch] = useState('')
+  const [orderSearch, setOrderSearch] = useState('')
   const [planInfo, setPlanInfo] = useState(null)
 
   useEffect(() => {
@@ -892,6 +893,13 @@ export default function AdminDashboard() {
           {activeTab === 'orders' && (
             <div>
               <div className="adm-page-title">All Orders</div>
+              <input 
+                className="adm-search" 
+                placeholder="Search by Order ID, customer, recipient or phone..." 
+                value={orderSearch} 
+                onChange={e => setOrderSearch(e.target.value)} 
+                style={{ marginBottom:16 }}
+              />
               <div className="adm-filters">
                 {[
                   { value: '', label: 'All' },
@@ -910,7 +918,15 @@ export default function AdminDashboard() {
                 <table className="adm-table">
                   <thead><tr><th>Order ID</th><th>Customer</th><th>Recipient</th><th>Route</th><th>Type</th><th>Rider</th><th>Status</th><th>Payment</th><th>Fee</th><th></th></tr></thead>
                   <tbody>
-                    {orders.map(o => (
+                    {orders.filter(o => {
+                      if (!orderSearch) return true
+                      const s = orderSearch.toLowerCase()
+                      return o.orderID?.toLowerCase().includes(s) ||
+                             o.customerName?.toLowerCase().includes(s) ||
+                             o.recipientName?.toLowerCase().includes(s) ||
+                             o.customerPhone?.includes(s) ||
+                             o.recipientPhone?.includes(s)
+                    }).map(o => (
                       <tr key={o._id}>
                         <td><span style={{ color: brandColor, fontWeight: 700 }}>{o.orderID}</span></td>
                         <td><div className="adm-table-name">{o.customerName}</div><div className="adm-table-sub">{o.customerPhone}</div></td>
